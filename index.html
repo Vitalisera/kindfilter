@@ -88,6 +88,7 @@
   <div id="status"></div>
 
   <div id="controls">
+    <button class="ctl" id="shotBtn"><span class="ic">📸</span><span>Ta bild</span></button>
     <button class="ctl" id="flipBtn"><span class="ic">🔄</span><span>Byt kamera</span></button>
     <button class="ctl" id="logoBtn"><span class="ic">🏷️</span><span>Logga på</span></button>
   </div>
@@ -95,7 +96,7 @@
   <div id="start">
     <img class="brand" id="brandLogo" alt="Vitalisera" />
     <h1>Vitalisera AR-kamerafilter</h1>
-    <p>Rikta kameran mot ett eller flera ansikten så placeras Vitaliseras logga på kinderna i realtid.</p>
+    <p>Rikta kameran mot ett eller flera ansikten så placeras Vitaliseras logga på pannan i realtid.</p>
     <p class="privacy">🔒 Allt körs lokalt i din webbläsare – ingen bild lämnar din enhet.</p>
     <button class="btn" id="startBtn">Starta kameran</button>
   </div>
@@ -115,6 +116,7 @@ const startEl  = document.getElementById("start");
 const startBtn = document.getElementById("startBtn");
 const flipBtn  = document.getElementById("flipBtn");
 const logoBtn  = document.getElementById("logoBtn");
+const shotBtn  = document.getElementById("shotBtn");
 const controls = document.getElementById("controls");
 const statusEl = document.getElementById("status");
 const errEl    = document.getElementById("err");
@@ -289,6 +291,35 @@ logoBtn.addEventListener("click", () => {
   showLogo = !showLogo;
   logoBtn.classList.toggle("off", !showLogo);
   logoBtn.querySelector("span:last-child").textContent = showLogo ? "Logga på" : "Logga av";
+});
+
+// Ta en stillbild av den aktuella vyn (med loggan).
+shotBtn.addEventListener("click", () => {
+  if (!canvas.width) return;
+  canvas.toBlob(async (blob) => {
+    if (!blob) { showError("Kunde inte skapa bilden."); return; }
+    const file = new File([blob], "vitalisera.png", { type: "image/png" });
+
+    // Mobil: använd enhetens dela-/spara-dialog om den stöder filer.
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "Vitalisera" });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return;   // användaren avbröt
+      }
+    }
+
+    // Annars: ladda ner filen.
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vitalisera.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, "image/png");
 });
 </script>
 </body>
