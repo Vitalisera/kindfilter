@@ -219,56 +219,54 @@ function px(p, mirror) {
   return { x: x * canvas.width, y: p.y * canvas.height };
 }
 
-// Landmarks som följer pannans båge (vänster -> mitt (10) -> höger).
-const FOREHEAD_IDS = [103, 67, 109, 10, 338, 297, 332];
+// Justerbara värden för loggan på pannan:
+const LOGO_WIDTH_FACTOR = 0.5;   // bredd som andel av ansiktsbredden
+const LOGO_BEND_FACTOR  = 0.07;  // hur mycket loggan välver sig (0 = helt platt)
 
 function drawLogoOnFace(lm, mirror) {
   if (!logoImg.naturalWidth) return;
 
-  // Skärmpunkter längs pannan. Säkerställ vänster->höger så loggan blir rättvänd.
-  let pts = FOREHEAD_IDS.map(i => px(lm[i], mirror));
-  if (pts[0].x > pts[pts.length - 1].x) pts = pts.slice().reverse();
+  // Ansiktsbredd (234 <-> 454) och huvudets lutning (roll).
+  const a = px(lm[234], mirror);
+  const b = px(lm[454], mirror);
+  const faceWidth = Math.hypot(b.x - a.x, b.y - a.y);
+  if (!faceWidth || !isFinite(faceWidth)) return;
+  // I spegelvänt läge pekar vektorn åt andra hållet -> vänd så loggan står rätt.
+  const dx = mirror ? (a.x - b.x) : (b.x - a.x);
+  const dy = mirror ? (a.y - b.y) : (b.y - a.y);
+  const angle = Math.atan2(dy, dx);
 
-  // Båglängd per segment + totalt.
-  const seg = [];
-  let total = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-    seg.push(d);
-    total += d;
-  }
-  if (!total || !isFinite(total)) return;
+  // Mitten av pannan (landmark 151).
+  const center = px(lm[151], mirror);
 
-  // Skala loggan så den spänner över pannbågen, behåll proportioner.
-  const scale = total / logoImg.naturalWidth;
-  const h = logoImg.naturalHeight * scale;
+  const w = faceWidth * LOGO_WIDTH_FACTOR;
+  const h = w * (logoImg.naturalHeight / logoImg.naturalWidth);
+  const bend = w * LOGO_BEND_FACTOR;
+  const cos = Math.cos(angle), sin = Math.sin(angle);
 
-  // Punkt + lokal lutning vid en viss båglängd.
-  function at(d) {
-    let i = 0;
-    while (i < seg.length - 1 && d > seg[i]) { d -= seg[i]; i++; }
-    const p0 = pts[i], p1 = pts[i + 1];
-    const t = seg[i] ? Math.max(0, Math.min(1, d / seg[i])) : 0;
-    return {
-      x: p0.x + (p1.x - p0.x) * t,
-      y: p0.y + (p1.y - p0.y) * t,
-      ang: Math.atan2(p1.y - p0.y, p1.x - p0.x)
-    };
-  }
-
-  // Rita loggan i vertikala remsor längs bågen -> böjs med pannan.
-  const N = 28;
-  const sw = logoImg.naturalWidth / N;   // källbredd per remsa
-  const dw = total / N;                  // målbredd per remsa
+  // Rita loggan i vertikala remsor längs en mild, konvex båge (mitten högst),
+  // roterad efter huvudets lutning och placerad på pannan.
+  const N = 24;
+  const sw = logoImg.naturalWidth / N;
+  const dw = w / N;
   for (let i = 0; i < N; i++) {
-    const c = at(total * (i + 0.5) / N);
+    const u = (i + 0.5) / N;            // 0..1 över bredden
+    const lx = (u - 0.5) * w;           // lokal x, centrerad
+    const k = (u - 0.5) * 2;            // -1..1
+    const ly = -bend * (1 - k * k);     // konvex uppåt (negativt = upp)
+    const slope = (8 * bend * lx) / (w * w);  // lokal tangentlutning
+
+    // Lokala koordinater -> skärm (rotera med roll, flytta till pannan).
+    const sx = center.x + lx * cos - ly * sin;
+    const sy = center.y + lx * sin + ly * cos;
+
     ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.rotate(c.ang);
+    ctx.translate(sx, sy);
+    ctx.rotate(angle + Math.atan(slope));
     ctx.drawImage(
       logoImg,
       i * sw, 0, sw, logoImg.naturalHeight,   // källa: en lodrät skiva
-      -dw / 2 - 0.5, -h / 2, dw + 1, h        // mål: centrerad på kurvan (+overlap)
+      -dw / 2 - 0.5, -h / 2, dw + 1, h        // mål: centrerad (+overlap mot sömmar)
     );
     ctx.restore();
   }
