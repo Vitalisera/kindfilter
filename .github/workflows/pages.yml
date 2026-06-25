@@ -2,7 +2,9 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - claude/vitalisera-ar-cheek-filter-e4k4ig
   workflow_dispatch:
 
 permissions:
