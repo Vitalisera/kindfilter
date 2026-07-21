@@ -1053,6 +1053,20 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         var wN=new TH.Vector3(LN[values[i]][0],LN[values[i]][1],LN[values[i]][2]).applyQuaternion(cur);
         var align=new TH.Quaternion().setFromUnitVectors(wN,new TH.Vector3(0,1,0));
         d.snapFrom=cur; d.snapTo=align.multiply(cur.clone()); d.snapT=0; }); }
+    // Gently lay a resting-but-tilted die flat WITHOUT re-throwing it: keep the value it already shows,
+    // just rotate its current top face to point straight up and lower it to the table. Far less jarring
+    // than a re-drop, so leaning/edge-resting dice settle smoothly instead of being tossed again.
+    function flattenDice(list,cb){ if(!list.length){ if(cb)cb(); return; }
+      snapIx=list; snapInc=0.08; phase="snap"; animating=true; settleCb=cb;
+      list.forEach(function(i){ var d=dice[i]; d.body.sleep(); d.body.velocity.setZero(); d.body.angularVelocity.setZero();
+        var v=topFace(d.mesh); d.value=v;
+        var cur=new TH.Quaternion(d.body.quaternion.x,d.body.quaternion.y,d.body.quaternion.z,d.body.quaternion.w);
+        var wN=new TH.Vector3(LN[v][0],LN[v][1],LN[v][2]).applyQuaternion(cur);
+        var align=new TH.Quaternion().setFromUnitVectors(wN,new TH.Vector3(0,1,0));
+        d.snapFrom=cur; d.snapTo=align.multiply(cur.clone()); d.snapT=0;
+        var cx=Math.max(-(FX-0.55),Math.min(FX-0.55,d.body.position.x)), cz=Math.max(-(FZ-0.55),Math.min(FZ-0.55,d.body.position.z));
+        d.snapPFrom=new TH.Vector3(d.body.position.x,d.body.position.y,d.body.position.z);
+        d.snapPTo=new TH.Vector3(cx,0.5,cz); }); }
     function loop(){ if(!running) return; rafId=requestAnimationFrame(loop);
       if(phase==="throw"){ var t=now(); if(!lastT) lastT=t; var dt=(t-lastT)/1000; lastT=t; if(dt>0.1) dt=0.1;
         accum+=dt; var guard=0; while(accum>=1/60 && guard<8){ world.step(1/60); simSteps++; accum-=1/60; guard++; }
@@ -1060,16 +1074,27 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         snapIx.forEach(function(i){ var b=dice[i].body; if(b.velocity.length()>0.26||b.angularVelocity.length()>0.4) moving++; });
         if(moving===0) restT+=dt; else restT=0;
         if(restT>0.24 || (t-throwStart)>7500){
-          // re-drop only clearly-wrong dice: genuinely stacked, or strongly tilted (a flat die is ~1.0)
-          var redrop=(declumps<6)?snapIx.filter(function(i){ return dice[i].body.position.y>0.8 || upNormalY(dice[i].mesh)<0.86; }):[];
-          if(redrop.length){ declumps++; restT=0; redrop.forEach(function(i){ var s2=freeSpot(i); dice[i].body.position.set(s2[0],3.0+Math.random()*0.6,s2[1]);
+          var allIx=snapIx.slice();
+          // Only re-throw dice that genuinely landed ON TOP of another die (center well above the table).
+          // A leaning or edge-resting die is NOT re-thrown — it's laid flat in place below. This is what
+          // makes re-drops rare: physics keeps stacking near-impossible, so this almost never fires.
+          var stacked=(declumps<6)?allIx.filter(function(i){ return dice[i].body.position.y>1.0; }):[];
+          if(stacked.length){ declumps++; restT=0; stacked.forEach(function(i){ var s2=freeSpot(i); dice[i].body.position.set(s2[0],3.0+Math.random()*0.6,s2[1]);
               dice[i].body.velocity.set((Math.random()-0.5)*1.4,-3.8,(Math.random()-0.5)*1.4); dice[i].body.angularVelocity.set((Math.random()-0.5)*8,(Math.random()-0.5)*8,(Math.random()-0.5)*8); }); }
-          else { snapIx.forEach(function(i){ dice[i].body.velocity.setZero(); dice[i].body.angularVelocity.setZero(); sync(dice[i]); }); phase="idle"; animating=false; var cb=settleCb; settleCb=null; if(cb) cb(); }
+          else {
+            allIx.forEach(function(i){ dice[i].body.velocity.setZero(); dice[i].body.angularVelocity.setZero(); sync(dice[i]); });
+            var tilted=allIx.filter(function(i){ return upNormalY(dice[i].mesh)<0.985; }); // not lying perfectly flat
+            var cb=settleCb; settleCb=null;
+            if(tilted.length){ flattenDice(tilted,cb); }         // smooth lay-flat, keeps the value shown
+            else { phase="idle"; animating=false; if(cb) cb(); }
+          }
         }
       } else if(phase==="snap"){ var done=true;
         snapIx.forEach(function(i){ var d=dice[i]; d.snapT=Math.min(1,d.snapT+snapInc); if(d.snapT<1) done=false;
-          var q=d.snapFrom.clone().slerp(d.snapTo,d.snapT); d.mesh.quaternion.copy(q); d.mesh.position.set(d.body.position.x,d.body.position.y,d.body.position.z); });
-        if(done){ snapIx.forEach(function(i){ var d=dice[i]; d.body.quaternion.set(d.snapTo.x,d.snapTo.y,d.snapTo.z,d.snapTo.w); d.snapTo=null; }); phase="idle"; animating=false; var cb2=settleCb; settleCb=null; if(cb2) cb2(); }
+          var q=d.snapFrom.clone().slerp(d.snapTo,d.snapT); d.mesh.quaternion.copy(q);
+          if(d.snapPTo){ d.mesh.position.copy(d.snapPFrom.clone().lerp(d.snapPTo,d.snapT)); } else d.mesh.position.set(d.body.position.x,d.body.position.y,d.body.position.z); });
+        if(done){ snapIx.forEach(function(i){ var d=dice[i]; d.body.quaternion.set(d.snapTo.x,d.snapTo.y,d.snapTo.z,d.snapTo.w);
+            if(d.snapPTo){ d.body.position.set(d.snapPTo.x,d.snapPTo.y,d.snapPTo.z); d.snapPTo=null; d.snapPFrom=null; } sync(d); d.snapTo=null; }); phase="idle"; animating=false; var cb2=settleCb; settleCb=null; if(cb2) cb2(); }
       }
       if(renderer) renderer.render(scene,camera);
     }
