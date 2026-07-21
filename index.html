@@ -790,7 +790,16 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     } else if(d.t==="live"){
       if((d.ts||0)>(g.live.ts||0)){ g.live={turnPid:d.turnPid,rollNo:d.rollNo,values:d.values||[],held:d.held||[],seq:d.seq||0,ts:d.ts||0,cid:d.cid,rolled:d.rolled};
         changed=true;
-        if(d.rolled && d.seq>lastSeq){ lastSeq=d.seq; triggerDiceRoll(d.values,d.held,{power:d.power,dir:d.dir,seed:d.seed,turnPid:d.turnPid,rollNo:d.rollNo}); } }
+        if(d.rolled && d.seq>lastSeq){ lastSeq=d.seq; triggerDiceRoll(d, d.cid===clientId); } }
+    } else if(d.t==="diceval"){
+      if(g.live.turnPid===d.turnPid && g.live.rollNo===d.rollNo){
+        var key=d.turnPid+"/"+d.rollNo; authVals[key]=d.values.slice();
+        var same=g.live.values.length===d.values.length && g.live.values.every(function(x,ix){return x===d.values[ix];});
+        if(!same){ g.live.values=d.values.slice(); changed=true; }
+        var initd=(d.cid===clientId);
+        if(initd || !use3D() || !Dice3D.inited() || !Dice3D.isAnimating()){ finalizeDice(key, initd); }
+        // else: still animating on this remote → its throw's settle callback will reconcile
+      }
     } else if(d.t==="gameover"){
       if(d.no===g.no){
         if(!state.history.some(function(h){return h.no===d.no&&h.variant===(d.variant||state.cfg.variant);}))
@@ -836,22 +845,39 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
   // Dice
   function myTurn(){ return state.cfg.mode==="digital" && state.game.live.turnPid; }
-  var diceRolling=false;
+  var diceRolling=false, authVals={};
   function use3D(){ return state.cfg.mode==="digital" && Dice3D.supported(); }
   function rollDice(opts){
     var g=state.game, live=g.live; if(state.cfg.mode!=="digital") return; if(!live.turnPid) live.turnPid=playerList()[0];
     if(live.rollNo>=3 || diceRolling) return;
-    var n=V().dice, vals=[], held=live.held.slice(); if(live.values.length!==n){ vals=[]; held=[]; for(var i=0;i<n;i++){ vals.push(die()); held.push(false); } }
-    else { for(var j=0;j<n;j++){ vals.push(held[j]?live.values[j]:die()); } }
+    var n=V().dice, held, i;
+    if(live.values.length!==n){ held=[]; for(i=0;i<n;i++) held.push(false); } else held=live.held.slice();
+    var prev=[]; for(i=0;i<n;i++) prev.push((live.values.length===n)?live.values[i]:1);
     var seq=(live.seq||0)+1; opts=opts||{};
     var seed=(Math.floor(Math.random()*2147483647))>>>0, power=opts.power||1, dir=opts.dir||[0,1];
-    emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:vals,held:held,seq:seq,rolled:true,seed:seed,power:power,dir:dir});
+    if(use3D()){
+      emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:[],held:held,seq:seq,rolled:true,seed:seed,power:power,dir:dir,prev:prev});
+    } else {
+      var vals=[]; for(i=0;i<n;i++) vals.push(held[i]?prev[i]:die());
+      emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:vals,held:held,seq:seq,rolled:true,seed:seed,power:power,dir:dir});
+    }
   }
-  function triggerDiceRoll(values,held,opts){ sfxRoll();
+  // Physics decides the result: throw, let the dice land, then read the faces where they stop.
+  function triggerDiceRoll(d, initiated){ sfxRoll();
+    var key=d.turnPid+"/"+d.rollNo;
     if(use3D() && Dice3D.inited()){ diceRolling=true;
-      Dice3D.throwDice(values,held,{power:opts.power,dir:opts.dir,seed:opts.seed,key:opts.turnPid+"/"+opts.rollNo},function(){ diceRolling=false; renderAll(); }); }
-    else if(use3D()){ diceRolling=false; }
-    else { diceRolling=false; queueAnim(values,held); } }
+      if(d.values && d.values.length){ authVals[key]=d.values.slice(); } // came from a non-WebGL device
+      Dice3D.throwDice(d.prev||[], d.held, {power:d.power,dir:d.dir,seed:d.seed,key:key}, function(){
+        if(initiated){ emit({t:"diceval",values:Dice3D.faces(),rollNo:d.rollNo,turnPid:d.turnPid}); }
+        else if(authVals[key]){ finalizeDice(key,false); }  // authoritative already here → reconcile
+        // else: wait for the diceval delta (arrives while no longer animating)
+      });
+    } else if(use3D()){ // WebGL not ready yet: fall back to RNG so play isn't blocked
+      diceRolling=false; if(initiated){ var n=(d.prev||[]).length||V().dice, f=[],i; for(i=0;i<n;i++) f.push(d.held&&d.held[i]?d.prev[i]:die()); emit({t:"diceval",values:f,rollNo:d.rollNo,turnPid:d.turnPid}); }
+    } else { diceRolling=false; queueAnim(d.values,d.held); } }
+  function finalizeDice(key, initiated){ diceRolling=false;
+    if(!initiated && use3D() && Dice3D.inited()){ Dice3D.reconcile(authVals[key]||[], function(){ renderAll(); }); }
+    renderAll(); }
   function queueAnim(vals,held){ setTimeout(function(){ animateRoll(vals,held); },0); }
   function toggleHold(i){ var g=state.game,live=g.live; if(state.cfg.mode!=="digital"||live.rollNo<1) return; if(i>=V().dice) return;
     var held=live.held.slice(); held[i]=!held[i]; emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo,values:live.values.slice(),held:held,seq:(live.seq||0)+1,rolled:false}); }
@@ -887,7 +913,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var TH=window.THREE, CN=window.CANNON;
     var libs=!!(TH&&CN);
     var renderer,scene,camera,world,dtMat,floorMat,rafId=null,inited=false,canvasEl=null,running=false;
-    var dice=[], N=0, animating=false, phase="idle", settleCb=null, framesLow=0, tStart=0, snapIx=[], pickCb=null, shownKey="", hapticCb=null, lastVib=0;
+    var dice=[], N=0, animating=false, phase="idle", settleCb=null, restT=0, accum=0, lastT=0, throwStart=0, snapIx=[], snapInc=0.14, pickCb=null, shownKey="", hapticCb=null, lastVib=0;
     function onCollide(e){ if(phase!=="throw"||!hapticCb) return; var c=e&&e.contact; if(!c||!c.getImpactVelocityAlongNormal) return; var v=Math.abs(c.getImpactVelocityAlongNormal()); if(v<1.7) return; var t=now(); if(t-lastVib<42) return; lastVib=t; hapticCb(Math.min(45,Math.round(7+v*2.4))); }
     var FX=6.4, FZ=2.3, DS=1.0;
     var LN={1:[1,0,0],6:[-1,0,0],2:[0,1,0],5:[0,-1,0],3:[0,0,1],4:[0,0,-1]};
@@ -951,11 +977,13 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
     function reflect(values,held,key){ if(!inited||animating) return; if(!values||!values.length){ clearDice(); shownKey=key; return; }
       if(key!==shownKey){ showStatic(values,held); shownKey=key; } else setHeld(held); }
-    function throwDice(values,held,opts,cb){ if(!inited){ if(cb)cb(); return; } ensureDice(values.length); opts=opts||{}; shownKey=opts.key||shownKey;
+    function faces(){ var out=[]; for(var i=0;i<N;i++) out.push(topFace(dice[i].mesh)); return out; }
+    // Physics-authoritative throw: dice land naturally; result is read from where they stop (no forcing).
+    function throwDice(prevValues,held,opts,cb){ if(!inited){ if(cb)cb(); return; } var n=prevValues.length; ensureDice(n); opts=opts||{}; shownKey=opts.key||shownKey;
       var power=Math.max(0.6,Math.min(2.4,opts.power||1)), dir=opts.dir||[0,1], seed=(opts.seed||1)>>>0, rnd=mulberry(seed);
-      settleCb=cb; snapIx=[]; framesLow=0; animating=true; phase="throw"; tStart=now(); var n=values.length;
-      for(var i=0;i<n;i++){ var d=dice[i]; d.value=values[i]; d.held=!!(held&&held[i]); d.snapTo=null; applyHeld(d);
-        if(d.held){ place(d,i,n,values[i]); continue; }
+      settleCb=cb; snapIx=[]; restT=0; accum=0; lastT=0; throwStart=now(); animating=true; phase="throw";
+      for(var i=0;i<n;i++){ var d=dice[i]; d.held=!!(held&&held[i]); d.snapTo=null; applyHeld(d);
+        if(d.held){ place(d,i,n,prevValues[i]); continue; }
         d.body.wakeUp();
         d.body.position.set(slotX(i,n)*0.6+(rnd()-0.5)*1.2, 4.2+rnd()*1.6, -FZ+0.5+rnd()*0.5);
         var p=2.2+power*3.4;
@@ -965,21 +993,27 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       }
       if(!snapIx.length){ animating=false; phase="idle"; if(cb) cb(); }
     }
-    function beginSnap(){ phase="snap"; snapIx.forEach(function(i){ var d=dice[i]; d.body.sleep(); d.body.velocity.setZero(); d.body.angularVelocity.setZero();
-      var cur=new TH.Quaternion(d.body.quaternion.x,d.body.quaternion.y,d.body.quaternion.z,d.body.quaternion.w);
-      var wN=new TH.Vector3(LN[d.value][0],LN[d.value][1],LN[d.value][2]).applyQuaternion(cur);
-      var align=new TH.Quaternion().setFromUnitVectors(wN,new TH.Vector3(0,1,0));
-      d.snapFrom=cur; d.snapTo=align.multiply(cur.clone()); d.snapT=0; }); }
+    // Gentle correction used ONLY on remote viewers if their replay diverged from the authoritative result.
+    function reconcile(values,cb){ if(!inited){ if(cb)cb(); return; } var list=[];
+      for(var i=0;i<N && i<values.length;i++){ if(topFace(dice[i].mesh)!==values[i]) list.push(i); }
+      if(!list.length){ if(cb)cb(); return; }
+      snapIx=list; snapInc=0.06; phase="snap"; animating=true; settleCb=cb;
+      snapIx.forEach(function(i){ var d=dice[i]; d.body.sleep(); d.body.velocity.setZero(); d.body.angularVelocity.setZero();
+        var cur=new TH.Quaternion(d.body.quaternion.x,d.body.quaternion.y,d.body.quaternion.z,d.body.quaternion.w);
+        var wN=new TH.Vector3(LN[values[i]][0],LN[values[i]][1],LN[values[i]][2]).applyQuaternion(cur);
+        var align=new TH.Quaternion().setFromUnitVectors(wN,new TH.Vector3(0,1,0));
+        d.snapFrom=cur; d.snapTo=align.multiply(cur.clone()); d.snapT=0; }); }
     function loop(){ if(!running) return; rafId=requestAnimationFrame(loop);
-      if(phase==="throw"){ world.step(1/60, undefined, 4); var moving=0;
-        for(var i=0;i<N;i++){ sync(dice[i]); }
-        snapIx.forEach(function(i){ var b=dice[i].body; if(b.velocity.length()>0.35||b.angularVelocity.length()>0.5) moving++; });
-        if(moving===0) framesLow++; else framesLow=0;
-        if(framesLow>8 || (now()-tStart)>3200){ beginSnap(); }
+      if(phase==="throw"){ var t=now(); if(!lastT) lastT=t; var dt=(t-lastT)/1000; lastT=t; if(dt>0.1) dt=0.1;
+        accum+=dt; var guard=0; while(accum>=1/60 && guard<8){ world.step(1/60); accum-=1/60; guard++; }
+        var moving=0; for(var i=0;i<N;i++){ sync(dice[i]); }
+        snapIx.forEach(function(i){ var b=dice[i].body; if(b.velocity.length()>0.26||b.angularVelocity.length()>0.4) moving++; });
+        if(moving===0) restT+=dt; else restT=0;
+        if(restT>0.28 || (t-throwStart)>6000){ snapIx.forEach(function(i){ dice[i].body.sleep(); dice[i].body.velocity.setZero(); dice[i].body.angularVelocity.setZero(); sync(dice[i]); }); phase="idle"; animating=false; var cb=settleCb; settleCb=null; if(cb) cb(); }
       } else if(phase==="snap"){ var done=true;
-        snapIx.forEach(function(i){ var d=dice[i]; d.snapT=Math.min(1,d.snapT+0.16); if(d.snapT<1) done=false;
+        snapIx.forEach(function(i){ var d=dice[i]; d.snapT=Math.min(1,d.snapT+snapInc); if(d.snapT<1) done=false;
           var q=d.snapFrom.clone().slerp(d.snapTo,d.snapT); d.mesh.quaternion.copy(q); d.mesh.position.set(d.body.position.x,d.body.position.y,d.body.position.z); });
-        if(done){ snapIx.forEach(function(i){ var d=dice[i]; d.body.quaternion.set(d.snapTo.x,d.snapTo.y,d.snapTo.z,d.snapTo.w); d.snapTo=null; }); phase="idle"; animating=false; var cb=settleCb; settleCb=null; if(cb) cb(); }
+        if(done){ snapIx.forEach(function(i){ var d=dice[i]; d.body.quaternion.set(d.snapTo.x,d.snapTo.y,d.snapTo.z,d.snapTo.w); d.snapTo=null; }); phase="idle"; animating=false; var cb2=settleCb; settleCb=null; if(cb2) cb2(); }
       }
       if(renderer) renderer.render(scene,camera);
     }
@@ -994,7 +1028,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function dieIndex(o){ while(o){ for(var i=0;i<dice.length;i++) if(dice[i].mesh===o) return i; o=o.parent; } return -1; }
     function setHeld(held){ for(var i=0;i<N;i++){ dice[i].held=!!(held&&held[i]); applyHeld(dice[i]); } }
     return { supported:supported, init:init, showStatic:showStatic, clearDice:clearDice, throwDice:throwDice, reflect:reflect, resize:resize, resume:resume, pause:pause,
-      setHeld:setHeld, onPick:function(cb){ pickCb=cb; }, onHaptic:function(cb){ hapticCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
+      setHeld:setHeld, faces:faces, reconcile:reconcile, onPick:function(cb){ pickCb=cb; }, onHaptic:function(cb){ hapticCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
       _topFace:function(i){ return dice[i]?topFace(dice[i].mesh):0; } };
   })();
   window.__DICE3D=Dice3D;
