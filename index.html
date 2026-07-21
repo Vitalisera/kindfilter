@@ -6,687 +6,832 @@
 <meta name="theme-color" content="#0f766e" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="description" content="Delad Yatzy-scoreboard – alla ser samma tavla på sin telefon och kan fylla i poäng." />
+<meta name="description" content="Delad Yatzy med digitala tärningar, serier och statistik – alla spelar på samma tavla i realtid." />
 <title>Yatzy – Scoreboard</title>
 <style>
   :root {
-    --bg: #f1f5f9;
-    --panel: #ffffff;
-    --ink: #0f172a;
-    --muted: #64748b;
-    --line: #e2e8f0;
-    --brand: #0f766e;
-    --brand-ink: #ffffff;
-    --brand-soft: #ccfbf1;
-    --accent: #f59e0b;
-    --empty: #f8fafc;
-    --empty-line: #cbd5e1;
-    --good: #16a34a;
-    --danger: #dc2626;
-    --shadow: 0 10px 30px rgba(15,23,42,.12);
-    --safe-b: env(safe-area-inset-bottom, 0px);
-    --safe-t: env(safe-area-inset-top, 0px);
+    --bg:#f1f5f9; --panel:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --brand:#0f766e; --brand-ink:#fff; --brand-soft:#ccfbf1; --accent:#f59e0b;
+    --empty:#f8fafc; --empty-line:#cbd5e1; --good:#16a34a; --danger:#dc2626;
+    --gold:#f59e0b; --preview:#94a3b8;
+    --shadow:0 10px 30px rgba(15,23,42,.12); --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0b1220;
-      --panel: #131c2e;
-      --ink: #f1f5f9;
-      --muted: #94a3b8;
-      --line: #24324a;
-      --brand: #14b8a6;
-      --brand-ink: #04211d;
-      --brand-soft: #0f2e2a;
-      --empty: #0f1826;
-      --empty-line: #33425e;
-      --shadow: 0 10px 30px rgba(0,0,0,.45);
+      --bg:#0b1220; --panel:#131c2e; --ink:#f1f5f9; --muted:#94a3b8; --line:#24324a;
+      --brand:#14b8a6; --brand-ink:#04211d; --brand-soft:#0f2e2a; --empty:#0f1826; --empty-line:#33425e;
+      --preview:#5b6b86; --shadow:0 10px 30px rgba(0,0,0,.45);
     }
   }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body {
-    margin: 0; padding: 0;
-    background: var(--bg); color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    -webkit-text-size-adjust: 100%;
-  }
-  body { min-height: 100vh; display: flex; flex-direction: column; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-text-size-adjust:100%; }
+  body { min-height:100vh; display:flex; flex-direction:column; }
+  button { font-family:inherit; }
 
-  /* ---------- Top bar ---------- */
-  header {
-    position: sticky; top: 0; z-index: 20;
-    background: var(--brand); color: var(--brand-ink);
-    padding: calc(10px + var(--safe-t)) 12px 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,.15);
-  }
-  .bar { display: flex; align-items: center; gap: 10px; }
-  .logo { font-size: 20px; font-weight: 800; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; }
-  .logo .dice { font-size: 22px; }
-  .bar .spacer { flex: 1; }
-  .iconbtn {
-    appearance: none; border: 0; cursor: pointer;
-    background: rgba(255,255,255,.16); color: var(--brand-ink);
-    border-radius: 12px; padding: 9px 12px; font-size: 15px; font-weight: 700;
-    display: inline-flex; align-items: center; gap: 6px;
-  }
-  .iconbtn:active { transform: scale(.96); }
-  .subbar {
-    display: flex; align-items: center; gap: 8px; margin-top: 8px;
-    font-size: 13px; color: rgba(255,255,255,.9); flex-wrap: wrap;
-  }
-  .roomchip {
-    background: rgba(0,0,0,.18); border-radius: 999px; padding: 5px 11px;
-    font-weight: 700; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 7px;
-    cursor: pointer;
-  }
-  .status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; box-shadow: 0 0 0 3px rgba(255,255,255,.15); }
-  .dot.live { background: #4ade80; }
-  .dot.off { background: #f59e0b; }
+  header { position:sticky; top:0; z-index:20; background:var(--brand); color:var(--brand-ink);
+    padding:calc(9px + var(--safe-t)) 12px 8px; box-shadow:0 2px 10px rgba(0,0,0,.15); }
+  .bar { display:flex; align-items:center; gap:10px; }
+  .logo { font-size:19px; font-weight:800; letter-spacing:.4px; display:flex; align-items:center; gap:7px; }
+  .logo .dice { font-size:21px; }
+  .vbadge { font-size:11px; font-weight:700; background:rgba(0,0,0,.18); padding:2px 8px; border-radius:999px; }
+  .bar .spacer { flex:1; }
+  .iconbtn { appearance:none; border:0; cursor:pointer; background:rgba(255,255,255,.16); color:var(--brand-ink);
+    border-radius:11px; padding:8px 11px; font-size:14px; font-weight:700; display:inline-flex; align-items:center; gap:6px; }
+  .iconbtn:active { transform:scale(.96); }
+  .subbar { display:flex; align-items:center; gap:8px; margin-top:7px; font-size:12px; color:rgba(255,255,255,.9); flex-wrap:wrap; }
+  .roomchip { background:rgba(0,0,0,.18); border-radius:999px; padding:4px 10px; font-weight:700; letter-spacing:1px; display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+  .status { display:inline-flex; align-items:center; gap:6px; font-weight:600; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#cbd5e1; box-shadow:0 0 0 3px rgba(255,255,255,.15); }
+  .dot.live { background:#4ade80; } .dot.off { background:#f59e0b; }
 
-  /* ---------- Board ---------- */
-  main { flex: 1; padding: 12px 0 148px; }
-  .board-wrap {
-    overflow-x: auto; overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
-    padding: 0 10px;
-  }
-  table.board { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
-  table.board th, table.board td { padding: 0; }
-  .cat {
-    position: sticky; left: 0; z-index: 5;
-    background: var(--panel);
-    text-align: left; font-weight: 600; font-size: 14px;
-    padding: 0 12px; height: 46px; min-width: 132px; max-width: 150px;
-    border-bottom: 1px solid var(--line); border-right: 2px solid var(--line);
-    color: var(--ink);
-  }
-  .cat small { display: block; color: var(--muted); font-weight: 500; font-size: 11px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  thead .corner {
-    position: sticky; left: 0; top: 0; z-index: 12;
-    background: var(--panel); border-right: 2px solid var(--line); border-bottom: 1px solid var(--line);
-    min-width: 132px; max-width: 150px; height: 64px; padding: 0 12px; text-align: left;
-    color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-    vertical-align: middle;
-  }
-  thead th.player {
-    position: sticky; top: 0; z-index: 8;
-    background: var(--panel); border-bottom: 1px solid var(--line); border-left: 1px solid var(--line);
-    height: 64px; min-width: 94px; padding: 4px 6px; cursor: pointer; vertical-align: middle;
-  }
-  .phead { display: flex; flex-direction: column; align-items: center; gap: 1px; }
-  .pname { font-weight: 800; font-size: 15px; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ptotal { font-size: 21px; font-weight: 800; color: var(--brand); line-height: 1.05; }
-  .pmeta { font-size: 11px; color: var(--muted); font-weight: 600; }
-  .pmeta.win { color: var(--accent); }
-  th.addcol { position: sticky; top: 0; z-index: 8; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 60px; }
-  .addbtn {
-    appearance: none; border: 1px dashed var(--empty-line); background: var(--empty);
-    color: var(--brand); font-weight: 800; font-size: 22px; width: 44px; height: 44px; border-radius: 12px; cursor: pointer;
-  }
-  td.addcol { border-bottom: 1px solid var(--line); }
+  .tabs { display:flex; gap:6px; background:var(--brand); padding:0 10px calc(9px); }
+  .tab { flex:1; appearance:none; border:0; cursor:pointer; background:rgba(0,0,0,.16); color:rgba(255,255,255,.85);
+    border-radius:11px; padding:9px 4px; font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:5px; }
+  .tab.active { background:var(--panel); color:var(--brand); }
+  .tab.hidden { display:none; }
 
-  tr.sec th {
-    position: sticky; left: 0; z-index: 6;
-    background: var(--bg); color: var(--muted);
-    text-align: left; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
-    padding: 12px 12px 6px; border-bottom: 1px solid var(--line);
-  }
+  main { flex:1; padding:12px 0 200px; }
+  .view { display:none; } .view.active { display:block; }
 
-  td.cell {
-    border-bottom: 1px solid var(--line); border-left: 1px solid var(--line);
-    text-align: center; height: 46px; min-width: 94px; cursor: pointer;
-    font-size: 18px; font-weight: 700; color: var(--ink);
-    background: var(--panel);
-  }
-  td.cell .val { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 34px; border-radius: 9px; padding: 0 6px; }
-  td.cell.empty .val {
-    background: var(--empty); border: 1.5px dashed var(--empty-line);
-    color: var(--empty-line); font-weight: 800; font-size: 16px; width: 40px;
-  }
-  td.cell.zero .val { color: var(--muted); font-weight: 600; }
-  td.cell.filled .val { background: var(--brand-soft); color: var(--brand); }
-  td.cell:active { background: var(--line); }
+  /* Banners */
+  .banner { margin:0 10px 10px; border-radius:14px; padding:11px 14px; box-shadow:var(--shadow); display:flex; align-items:center; gap:10px; font-weight:700; }
+  .banner.turn { background:var(--brand-soft); color:var(--brand); }
+  .banner.turn.you { background:linear-gradient(135deg,#14b8a6,#0f766e); color:#fff; }
+  .banner .em { font-size:22px; }
+  .banner .sub { display:block; font-weight:600; font-size:12px; opacity:.85; }
+  .winner { margin:0 10px 12px; background:linear-gradient(135deg,#fbbf24,#f59e0b); color:#3b1e00; border-radius:16px; padding:14px 16px; box-shadow:var(--shadow); display:none; align-items:center; gap:12px; font-weight:800; }
+  .winner.show { display:flex; } .winner .trophy { font-size:30px; } .winner .wtxt { font-size:16px; line-height:1.25; } .winner .wtxt small { display:block; font-weight:700; opacity:.85; font-size:13px; }
 
-  tr.summary td, tr.summary th { background: var(--bg) !important; }
-  tr.summary .cat { background: var(--bg); font-weight: 800; }
-  tr.summary td.cell { cursor: default; font-weight: 800; border-left: 1px solid var(--line); }
-  tr.summary td.cell:active { background: var(--bg); }
-  .bonus-need { font-size: 11px; font-weight: 700; color: var(--muted); display:block; margin-top:-3px; }
-  .bonus-ok { color: var(--good); }
-  tr.total .cat { color: var(--brand); }
-  tr.total td.cell { color: var(--brand); font-size: 20px; }
+  /* Board */
+  .board-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; padding:0 10px; }
+  table.board { border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; }
+  .cat { position:sticky; left:0; z-index:5; background:var(--panel); text-align:left; font-weight:600; font-size:14px;
+    padding:0 10px; height:44px; min-width:124px; max-width:150px; border-bottom:1px solid var(--line); border-right:2px solid var(--line); color:var(--ink); }
+  .cat small { display:block; color:var(--muted); font-weight:500; font-size:10.5px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  thead .corner { position:sticky; left:0; top:0; z-index:12; background:var(--panel); border-right:2px solid var(--line); border-bottom:1px solid var(--line);
+    min-width:124px; max-width:150px; height:60px; padding:0 10px; text-align:left; color:var(--muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; vertical-align:middle; }
+  thead th.player { position:sticky; top:0; z-index:8; background:var(--panel); border-bottom:1px solid var(--line); border-left:1px solid var(--line);
+    height:60px; min-width:90px; padding:4px 6px; cursor:pointer; vertical-align:middle; }
+  thead th.player.active { background:var(--brand-soft); }
+  .phead { display:flex; flex-direction:column; align-items:center; gap:1px; }
+  .pname { font-weight:800; font-size:14px; max-width:88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pname .me { color:var(--brand); font-size:10px; }
+  .ptotal { font-size:20px; font-weight:800; color:var(--brand); line-height:1.05; }
+  .pmeta { font-size:10.5px; color:var(--muted); font-weight:600; } .pmeta.win { color:var(--accent); }
+  th.addcol { position:sticky; top:0; z-index:8; background:var(--panel); border-bottom:1px solid var(--line); min-width:54px; }
+  .addbtn { appearance:none; border:1px dashed var(--empty-line); background:var(--empty); color:var(--brand); font-weight:800; font-size:20px; width:40px; height:40px; border-radius:11px; cursor:pointer; }
+  td.addcol { border-bottom:1px solid var(--line); }
+  tr.sec th { position:sticky; left:0; z-index:6; background:var(--bg); color:var(--muted); text-align:left; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; padding:10px 10px 5px; border-bottom:1px solid var(--line); }
+  td.cell { border-bottom:1px solid var(--line); border-left:1px solid var(--line); text-align:center; height:44px; min-width:90px; cursor:default; font-size:17px; font-weight:700; color:var(--ink); background:var(--panel); }
+  td.cell .val { display:inline-flex; align-items:center; justify-content:center; min-width:38px; height:32px; border-radius:9px; padding:0 6px; }
+  td.cell.empty .val { background:var(--empty); border:1.5px dashed var(--empty-line); color:var(--empty-line); font-weight:800; font-size:15px; width:38px; }
+  td.cell.zero .val { color:var(--muted); font-weight:600; }
+  td.cell.filled .val { background:var(--brand-soft); color:var(--brand); }
+  td.cell.tap { cursor:pointer; } td.cell.tap:active { background:var(--line); }
+  td.cell.preview .val { background:transparent; border:1.5px solid var(--brand); color:var(--brand); font-weight:800; }
+  td.cell.preview.zero .val { border-color:var(--empty-line); color:var(--muted); }
+  th.player.active + tbody, .colactive { }
+  tr.summary td, tr.summary th { background:var(--bg) !important; }
+  tr.summary .cat { background:var(--bg); font-weight:800; }
+  tr.summary td.cell { cursor:default; font-weight:800; border-left:1px solid var(--line); }
+  .bonus-need { font-size:10.5px; font-weight:700; color:var(--muted); display:block; margin-top:-3px; } .bonus-ok { color:var(--good); }
+  tr.total .cat { color:var(--brand); } tr.total td.cell { color:var(--brand); font-size:19px; }
 
-  .empty-state { text-align: center; color: var(--muted); padding: 44px 24px; }
-  .empty-state h2 { color: var(--ink); font-size: 19px; margin: 0 0 6px; }
-  .empty-state p { line-height: 1.5; margin: 0; }
-  .empty-state .big { font-size: 46px; margin-bottom: 8px; }
+  .empty-state { text-align:center; color:var(--muted); padding:38px 24px; }
+  .empty-state h2 { color:var(--ink); font-size:20px; margin:0 0 6px; } .empty-state p { line-height:1.5; margin:0 0 18px; } .empty-state .big { font-size:46px; margin-bottom:6px; }
+  .cta { appearance:none; border:0; cursor:pointer; background:var(--brand); color:var(--brand-ink); border-radius:14px; padding:15px 26px; font-size:16px; font-weight:800; box-shadow:var(--shadow); }
 
-  /* ---------- Bottom action bar ---------- */
-  .fab {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
-    background: linear-gradient(to top, var(--bg) 68%, transparent);
-    padding: 14px 14px calc(14px + var(--safe-b));
-    display: flex; gap: 10px; justify-content: center;
-  }
-  .fab button {
-    appearance: none; border: 0; cursor: pointer; border-radius: 14px;
-    padding: 15px 18px; font-size: 15px; font-weight: 800; box-shadow: var(--shadow);
-  }
-  .fab .primary { background: var(--brand); color: var(--brand-ink); flex: 1; max-width: 280px; }
-  .fab .ghost { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+  /* Cards (standings + stats) */
+  .wrap { padding:4px 12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin-bottom:12px; box-shadow:var(--shadow); }
+  .card h3 { margin:0 0 10px; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .rank { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); }
+  .rank:last-child { border-bottom:0; }
+  .rank .pos { width:26px; height:26px; border-radius:50%; background:var(--empty); color:var(--muted); font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .rank .pos.g1 { background:var(--gold); color:#3b1e00; } .rank .pos.g2 { background:#cbd5e1; color:#1e293b; } .rank .pos.g3 { background:#e7b48a; color:#3b1e00; }
+  .rank .rn { flex:1; font-weight:700; } .rank .rn small { display:block; color:var(--muted); font-weight:600; font-size:12px; }
+  .rank .rv { font-weight:800; font-size:18px; color:var(--brand); } .rank .rv small { color:var(--muted); font-weight:600; font-size:11px; display:block; text-align:right; }
+  .progress { height:8px; border-radius:6px; background:var(--empty); overflow:hidden; margin-top:8px; }
+  .progress > div { height:100%; background:var(--brand); }
+  .statgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .stat { background:var(--empty); border-radius:12px; padding:10px 12px; }
+  .stat .k { font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
+  .stat .v { font-size:22px; font-weight:800; margin-top:2px; } .stat .v small { font-size:12px; color:var(--muted); font-weight:700; }
+  .muted-note { color:var(--muted); font-size:12.5px; line-height:1.5; text-align:center; padding:8px 16px; }
 
-  /* ---------- Sheet ---------- */
-  .backdrop {
-    position: fixed; inset: 0; z-index: 40; background: rgba(2,6,23,.55);
-    display: none; align-items: flex-end; justify-content: center;
-  }
-  .backdrop.open { display: flex; }
-  .sheet {
-    width: 100%; max-width: 520px; background: var(--panel); color: var(--ink);
-    border-radius: 22px 22px 0 0; padding: 8px 16px calc(18px + var(--safe-b));
-    box-shadow: 0 -10px 40px rgba(0,0,0,.35);
-    animation: rise .18s ease-out;
-  }
-  @keyframes rise { from { transform: translateY(30px); opacity: .5; } to { transform: translateY(0); opacity: 1; } }
-  .grabber { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 6px auto 12px; }
-  .sheet h3 { margin: 0 0 2px; font-size: 19px; }
-  .sheet .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
-  .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .chip {
-    appearance: none; border: 1px solid var(--line); background: var(--empty); color: var(--ink);
-    border-radius: 14px; padding: 16px 0; font-size: 20px; font-weight: 800; cursor: pointer;
-  }
-  .chip:active { transform: scale(.96); }
-  .chip.zero { color: var(--muted); }
-  .chip.big { grid-column: span 2; background: var(--brand-soft); color: var(--brand); border-color: transparent; }
-  .chip.strike { color: var(--danger); border-color: var(--line); background: var(--empty); }
-  .chip.cur { outline: 3px solid var(--brand); outline-offset: -1px; }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
-  .kdisplay { text-align: center; font-size: 40px; font-weight: 800; padding: 6px 0 12px; min-height: 56px; color: var(--brand); }
-  .sheet .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-  .btn { appearance: none; border: 0; cursor: pointer; border-radius: 14px; padding: 15px 0; font-size: 16px; font-weight: 800; }
-  .btn.primary { background: var(--brand); color: var(--brand-ink); }
-  .btn.sec { background: var(--empty); color: var(--ink); border: 1px solid var(--line); }
-  .btn.danger { background: var(--empty); color: var(--danger); border: 1px solid var(--line); }
-  .btn.full { width: 100%; grid-column: 1 / -1; }
-  .menu-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
-  .menu-list button {
-    text-align: left; background: var(--empty); border: 1px solid var(--line); color: var(--ink);
-    border-radius: 14px; padding: 15px 16px; font-size: 16px; font-weight: 700; cursor: pointer;
-    display: flex; align-items: center; gap: 12px;
-  }
-  .menu-list button .em { font-size: 20px; }
-  .menu-list button.warn { color: var(--danger); }
-  .hint { background: var(--empty); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; color: var(--muted); margin-top: 12px; line-height: 1.4; }
-  .field { width: 100%; font-size: 18px; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--empty); color: var(--ink); margin-top: 4px; }
+  /* Dice tray */
+  .tray { position:fixed; left:0; right:0; bottom:0; z-index:16; background:var(--panel); border-top:1px solid var(--line);
+    padding:10px 12px calc(12px + var(--safe-b)); box-shadow:0 -8px 24px rgba(0,0,0,.14); }
+  .tray .tturn { text-align:center; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:8px; min-height:18px; }
+  .tray .tturn b { color:var(--brand); }
+  .dicerow { display:flex; justify-content:center; gap:8px; margin-bottom:10px; }
+  .die { width:52px; height:52px; border-radius:12px; background:#fff; border:1px solid #e2e8f0; box-shadow:0 2px 5px rgba(0,0,0,.14);
+    display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); padding:8px; cursor:pointer; position:relative; }
+  .die .pip { width:9px; height:9px; border-radius:50%; background:#0f172a; align-self:center; justify-self:center; opacity:0; }
+  .die .pip.on { opacity:1; }
+  .die.blank { background:var(--empty); border-style:dashed; box-shadow:none; }
+  .die.held { background:var(--brand-soft); border-color:var(--brand); transform:translateY(3px); }
+  .die.held::after { content:"LÅST"; position:absolute; top:-9px; left:50%; transform:translateX(-50%); font-size:8px; font-weight:800; color:var(--brand); background:var(--panel); padding:0 4px; border-radius:4px; }
+  .die.rolling { animation:tumble .12s linear infinite; }
+  @keyframes tumble { 0%{transform:rotate(0) translateY(0);} 25%{transform:rotate(-9deg) translateY(-3px);} 75%{transform:rotate(9deg) translateY(2px);} 100%{transform:rotate(0) translateY(0);} }
+  .tray .tactions { display:flex; gap:10px; }
+  .tray .roll { flex:1; appearance:none; border:0; cursor:pointer; background:var(--brand); color:var(--brand-ink); border-radius:14px; padding:15px; font-size:16px; font-weight:800; }
+  .tray .roll:disabled { background:var(--empty); color:var(--muted); }
+  .tray .hint2 { text-align:center; font-size:11.5px; color:var(--muted); margin-top:7px; }
+  .actionbar { position:fixed; left:0; right:0; bottom:0; z-index:15; background:linear-gradient(to top,var(--bg) 68%,transparent); padding:14px; display:flex; gap:10px; justify-content:center; }
+  .actionbar button { appearance:none; border:0; cursor:pointer; border-radius:14px; padding:15px 18px; font-size:15px; font-weight:800; box-shadow:var(--shadow); }
+  .actionbar .primary { background:var(--brand); color:var(--brand-ink); flex:1; max-width:280px; }
+  .actionbar .ghost { background:var(--panel); color:var(--ink); border:1px solid var(--line); }
 
-  .toast {
-    position: fixed; left: 50%; bottom: calc(104px + var(--safe-b)); transform: translateX(-50%);
-    background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 999px;
-    font-size: 14px; font-weight: 700; z-index: 60; opacity: 0; pointer-events: none;
-    transition: opacity .2s, transform .2s; box-shadow: var(--shadow); white-space: nowrap;
-  }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+  /* Sheet */
+  .backdrop { position:fixed; inset:0; z-index:40; background:rgba(2,6,23,.55); display:none; align-items:flex-end; justify-content:center; }
+  .backdrop.open { display:flex; }
+  .sheet { width:100%; max-width:520px; background:var(--panel); color:var(--ink); border-radius:22px 22px 0 0; padding:8px 16px calc(18px + var(--safe-b)); box-shadow:0 -10px 40px rgba(0,0,0,.35); animation:rise .18s ease-out; max-height:88vh; overflow-y:auto; }
+  @keyframes rise { from{transform:translateY(30px);opacity:.5;} to{transform:translateY(0);opacity:1;} }
+  .grabber { width:44px; height:5px; border-radius:3px; background:var(--line); margin:6px auto 12px; }
+  .sheet h3 { margin:0 0 2px; font-size:19px; } .sheet .sub { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  .chips { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .chip { appearance:none; border:1px solid var(--line); background:var(--empty); color:var(--ink); border-radius:14px; padding:15px 0; font-size:19px; font-weight:800; cursor:pointer; }
+  .chip:active { transform:scale(.96); } .chip.zero { color:var(--muted); }
+  .chip.big { grid-column:span 2; background:var(--brand-soft); color:var(--brand); border-color:transparent; }
+  .chip.strike { color:var(--danger); }
+  .keypad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:4px; }
+  .kdisplay { text-align:center; font-size:38px; font-weight:800; padding:4px 0 10px; color:var(--brand); }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .btn { appearance:none; border:0; cursor:pointer; border-radius:14px; padding:15px 0; font-size:16px; font-weight:800; }
+  .btn.primary { background:var(--brand); color:var(--brand-ink); } .btn.sec { background:var(--empty); color:var(--ink); border:1px solid var(--line); } .btn.danger { background:var(--empty); color:var(--danger); border:1px solid var(--line); }
+  .btn.full { width:100%; grid-column:1/-1; }
+  .menu-list { display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .menu-list button { text-align:left; background:var(--empty); border:1px solid var(--line); color:var(--ink); border-radius:14px; padding:14px 16px; font-size:16px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:12px; }
+  .menu-list button .em { font-size:20px; } .menu-list button.warn { color:var(--danger); }
+  .hint { background:var(--empty); border:1px solid var(--line); border-radius:12px; padding:10px 12px; font-size:13px; color:var(--muted); margin-top:12px; line-height:1.4; }
+  .field { width:100%; font-size:18px; padding:13px; border-radius:14px; border:1px solid var(--line); background:var(--empty); color:var(--ink); margin-top:4px; }
+  .opts { display:flex; flex-direction:column; gap:9px; margin:8px 0; }
+  .opt { display:flex; align-items:flex-start; gap:10px; border:1.5px solid var(--line); border-radius:14px; padding:12px 14px; cursor:pointer; }
+  .opt.on { border-color:var(--brand); background:var(--brand-soft); }
+  .opt .oi { font-size:22px; } .opt .ot { font-weight:800; } .opt .od { font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .opt.on .od { color:var(--brand); }
+  .plist { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .ptag { background:var(--brand-soft); color:var(--brand); border-radius:999px; padding:7px 12px 7px 14px; font-weight:800; font-size:14px; display:flex; align-items:center; gap:8px; }
+  .ptag button { appearance:none; border:0; background:transparent; color:var(--brand); font-weight:900; cursor:pointer; font-size:16px; line-height:1; }
+  .seg { display:flex; gap:6px; background:var(--empty); padding:4px; border-radius:12px; margin:6px 0; }
+  .seg button { flex:1; appearance:none; border:0; background:transparent; color:var(--muted); font-weight:800; padding:9px 4px; border-radius:9px; cursor:pointer; font-size:13.5px; }
+  .seg button.on { background:var(--panel); color:var(--brand); box-shadow:0 1px 4px rgba(0,0,0,.1); }
+  .inline { display:flex; align-items:center; gap:8px; margin-top:8px; } .inline label { font-size:14px; font-weight:700; }
 
-  .winner {
-    margin: 0 10px 12px; background: linear-gradient(135deg, #fbbf24, #f59e0b);
-    color: #3b1e00; border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow);
-    display: none; align-items: center; gap: 12px; font-weight: 800;
-  }
-  .winner.show { display: flex; }
-  .winner .trophy { font-size: 30px; }
-  .winner .wtxt { font-size: 16px; line-height: 1.25; }
-  .winner .wtxt small { display:block; font-weight:700; opacity:.85; font-size:13px; }
+  .toast { position:fixed; left:50%; bottom:calc(150px + var(--safe-b)); transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:11px 18px; border-radius:999px; font-size:14px; font-weight:700; z-index:60; opacity:0; pointer-events:none; transition:opacity .2s,transform .2s; box-shadow:var(--shadow); white-space:nowrap; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(-4px); }
 </style>
 </head>
 <body>
   <header>
     <div class="bar">
-      <div class="logo"><span class="dice">🎲</span> Yatzy</div>
+      <div class="logo"><span class="dice">🎲</span> Yatzy <span class="vbadge" id="vbadge">Yatzy</span></div>
       <div class="spacer"></div>
-      <button class="iconbtn" id="shareBtn">📤 Dela</button>
+      <button class="iconbtn" id="shareBtn">📤</button>
       <button class="iconbtn" id="menuBtn" aria-label="Meny">⋯</button>
     </div>
     <div class="subbar">
-      <span class="roomchip" id="roomChip" title="Tryck för att dela">RUM <b id="roomCode">····</b></span>
+      <span class="roomchip" id="roomChip" title="Dela">RUM <b id="roomCode">····</b></span>
       <span class="status"><span class="dot" id="statusDot"></span><span id="statusText">Ansluter…</span></span>
     </div>
   </header>
+  <div class="tabs">
+    <button class="tab active" data-tab="play" id="tabPlay">🎲 Spel</button>
+    <button class="tab hidden" data-tab="standings" id="tabStandings">🏆 Ställning</button>
+    <button class="tab" data-tab="stats" id="tabStats">📊 Statistik</button>
+  </div>
 
   <main>
-    <div class="winner" id="winner">
-      <span class="trophy">🏆</span>
-      <span class="wtxt" id="winnerText"></span>
+    <div class="view active" id="view-play">
+      <div class="winner" id="winner"><span class="trophy">🏆</span><span class="wtxt" id="winnerText"></span></div>
+      <div id="turnBanner"></div>
+      <div id="boardHost"></div>
     </div>
-    <div id="boardHost"></div>
+    <div class="view" id="view-standings"><div class="wrap" id="standingsHost"></div></div>
+    <div class="view" id="view-stats"><div class="wrap" id="statsHost"></div></div>
   </main>
 
-  <div class="fab">
-    <button class="ghost" id="addPlayerFab">＋ Spelare</button>
-    <button class="primary" id="shareFab">📤 Bjud in spelare</button>
-  </div>
+  <div id="bottomHost"></div>
 
-  <div class="backdrop" id="backdrop">
-    <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
-  </div>
-
+  <div class="backdrop" id="backdrop"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
   <div class="toast" id="toast"></div>
 
 <script>
 "use strict";
 (function () {
-  // ---------------------------------------------------------------- Config
-  var TOPIC_PREFIX = "kindfilter_yatzy_v1_";
-  var NTFY = "https://ntfy.sh/";
-  var ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  // ============================================================ SCORING ENGINE
+  function cnt(d){ var c=[0,0,0,0,0,0,0],i; for(i=0;i<d.length;i++) c[d[i]]++; return c; }
+  function sum(d){ var s=0,i; for(i=0;i<d.length;i++) s+=d[i]; return s; }
+  function hi(d,n){ var c=cnt(d),f; for(f=6;f>=1;f--) if(c[f]>=n) return f; return 0; }
+  function pairs(d){ var c=cnt(d),r=[],f; for(f=6;f>=1;f--) if(c[f]>=2) r.push(f); return r; }
+  function has(d,arr){ var c=cnt(d),i; for(i=0;i<arr.length;i++) if(!c[arr[i]]) return false; return true; }
+  function sortStr(d){ return d.slice().sort().join(""); }
+  function upperFn(f){ return function(d){ return f*cnt(d)[f]; }; }
+  function fhSum(d){ var t=hi(d,3); if(!t) return 0; var c=cnt(d),b; for(b=6;b>=1;b--) if(b!==t&&c[b]>=2) return 3*t+2*b; return 0; }
+  function isYtz(d,ctx){ return ctx&&ctx.variant==="yahtzee"&&hi(d,5)>0&&ctx.filled&&ctx.filled.yahtzee; } // joker active
 
-  var CATS = [
-    { key: "ettor",  label: "Ettor",  hint: "Summan av alla 1:or", sec: "upper", kind: "mult", mult: 1, count: 5 },
-    { key: "tvaor",  label: "Tvåor",  hint: "Summan av alla 2:or", sec: "upper", kind: "mult", mult: 2, count: 5 },
-    { key: "treor",  label: "Treor",  hint: "Summan av alla 3:or", sec: "upper", kind: "mult", mult: 3, count: 5 },
-    { key: "fyror",  label: "Fyror",  hint: "Summan av alla 4:or", sec: "upper", kind: "mult", mult: 4, count: 5 },
-    { key: "femmor", label: "Femmor", hint: "Summan av alla 5:or", sec: "upper", kind: "mult", mult: 5, count: 5 },
-    { key: "sexor",  label: "Sexor",  hint: "Summan av alla 6:or", sec: "upper", kind: "mult", mult: 6, count: 5 },
-
-    { key: "ettpar",     label: "Ett par",     hint: "2 lika – högsta paret", sec: "lower", kind: "mult", mult: 2, count: 6 },
-    { key: "tvapar",     label: "Två par",     hint: "Två olika par", sec: "lower", kind: "list", values: [0,6,8,10,12,14,16,18,20,22] },
-    { key: "tretal",     label: "Tretal",      hint: "3 lika", sec: "lower", kind: "mult", mult: 3, count: 6 },
-    { key: "fyrtal",     label: "Fyrtal",      hint: "4 lika", sec: "lower", kind: "mult", mult: 4, count: 6 },
-    { key: "litenstege", label: "Liten stege", hint: "1-2-3-4-5 = 15 p", sec: "lower", kind: "fixed", val: 15 },
-    { key: "storstege",  label: "Stor stege",  hint: "2-3-4-5-6 = 20 p", sec: "lower", kind: "fixed", val: 20 },
-    { key: "kak",        label: "Kåk",         hint: "Par + tretal (summan)", sec: "lower", kind: "free", min: 0, max: 28 },
-    { key: "chans",      label: "Chans",       hint: "Summan av alla tärningar", sec: "lower", kind: "free", min: 0, max: 30 },
-    { key: "yatzy",      label: "Yatzy",       hint: "5 lika = 50 p", sec: "lower", kind: "fixed", val: 50 }
+  var U = [
+    {key:"ones",sv:"Ettor",en:"Ones",sec:"upper",score:upperFn(1),max:5},
+    {key:"twos",sv:"Tvåor",en:"Twos",sec:"upper",score:upperFn(2),max:10},
+    {key:"threes",sv:"Treor",en:"Threes",sec:"upper",score:upperFn(3),max:15},
+    {key:"fours",sv:"Fyror",en:"Fours",sec:"upper",score:upperFn(4),max:20},
+    {key:"fives",sv:"Femmor",en:"Fives",sec:"upper",score:upperFn(5),max:25},
+    {key:"sixes",sv:"Sexor",en:"Sixes",sec:"upper",score:upperFn(6),max:30}
   ];
-  var CAT_BY_KEY = {};
-  CATS.forEach(function (c) { CAT_BY_KEY[c.key] = c; });
-  var UPPER_KEYS = CATS.filter(function (c) { return c.sec === "upper"; }).map(function (c) { return c.key; });
-  var LOWER_KEYS = CATS.filter(function (c) { return c.sec === "lower"; }).map(function (c) { return c.key; });
-  var BONUS_LIMIT = 63, BONUS_VALUE = 50;
+  function upper6(){ return [
+    {key:"ones",sv:"Ettor",en:"Ones",sec:"upper",score:upperFn(1),max:6},
+    {key:"twos",sv:"Tvåor",en:"Twos",sec:"upper",score:upperFn(2),max:12},
+    {key:"threes",sv:"Treor",en:"Threes",sec:"upper",score:upperFn(3),max:18},
+    {key:"fours",sv:"Fyror",en:"Fours",sec:"upper",score:upperFn(4),max:24},
+    {key:"fives",sv:"Femmor",en:"Fives",sec:"upper",score:upperFn(5),max:30},
+    {key:"sixes",sv:"Sexor",en:"Sixes",sec:"upper",score:upperFn(6),max:36}
+  ]; }
 
-  // ---------------------------------------------------------------- Helpers
-  var $ = function (id) { return document.getElementById(id); };
-  function rid(len, alpha) {
-    alpha = alpha || ROOM_ALPHABET; len = len || 4;
-    var s = "", a = new Uint8Array(len), i;
-    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(a);
-    else for (i = 0; i < len; i++) a[i] = Math.floor(Math.random() * 256);
-    for (i = 0; i < len; i++) s += alpha[a[i] % alpha.length];
-    return s;
+  var VARIANTS = {
+    yatzy: {
+      id:"yatzy", name:"Yatzy", short:"Yatzy", dice:5, bonus:{at:63,val:50}, bonusHint:"vid 63 (+50)",
+      cats: U.concat([
+        {key:"one_pair",sv:"Ett par",en:"One pair",sec:"lower",hint:"2 lika – högsta",score:function(d){return 2*hi(d,2);},max:12},
+        {key:"two_pairs",sv:"Två par",en:"Two pairs",sec:"lower",hint:"Två olika par",score:function(d){var p=pairs(d);return p.length>=2?2*(p[0]+p[1]):0;},max:22},
+        {key:"three_kind",sv:"Tretal",en:"3 of a kind",sec:"lower",hint:"3 lika",score:function(d){return 3*hi(d,3);},max:18},
+        {key:"four_kind",sv:"Fyrtal",en:"4 of a kind",sec:"lower",hint:"4 lika",score:function(d){return 4*hi(d,4);},max:24},
+        {key:"small_str",sv:"Liten stege",en:"Small str.",sec:"lower",hint:"1-2-3-4-5 = 15",fixed:15,score:function(d){return sortStr(d)==="12345"?15:0;}},
+        {key:"large_str",sv:"Stor stege",en:"Large str.",sec:"lower",hint:"2-3-4-5-6 = 20",fixed:20,score:function(d){return sortStr(d)==="23456"?20:0;}},
+        {key:"full_house",sv:"Kåk",en:"Full house",sec:"lower",hint:"Par + tretal (summa)",score:fhSum,max:28},
+        {key:"chance",sv:"Chans",en:"Chance",sec:"lower",hint:"Summa alla",score:function(d){return sum(d);},max:30},
+        {key:"yatzy",sv:"Yatzy",en:"Yatzy",sec:"lower",hint:"5 lika = 50",fixed:50,score:function(d){return hi(d,5)?50:0;}}
+      ])
+    },
+    maxi: {
+      id:"maxi", name:"Maxi Yatzy", short:"Maxi", dice:6, bonus:{at:84,val:100}, bonusHint:"vid 84 (+100)",
+      cats: upper6().concat([
+        {key:"one_pair",sv:"Ett par",en:"One pair",sec:"lower",hint:"2 lika – högsta",score:function(d){return 2*hi(d,2);},max:12},
+        {key:"two_pairs",sv:"Två par",en:"Two pairs",sec:"lower",hint:"Två olika par",score:function(d){var p=pairs(d);return p.length>=2?2*(p[0]+p[1]):0;},max:24},
+        {key:"three_pairs",sv:"Tre par",en:"Three pairs",sec:"lower",hint:"Tre olika par",score:function(d){var p=pairs(d);return p.length>=3?2*(p[0]+p[1]+p[2]):0;},max:30},
+        {key:"three_kind",sv:"Tretal",en:"3 of a kind",sec:"lower",hint:"3 lika",score:function(d){return 3*hi(d,3);},max:18},
+        {key:"four_kind",sv:"Fyrtal",en:"4 of a kind",sec:"lower",hint:"4 lika",score:function(d){return 4*hi(d,4);},max:24},
+        {key:"five_kind",sv:"Femtal",en:"5 of a kind",sec:"lower",hint:"5 lika",score:function(d){return 5*hi(d,5);},max:30},
+        {key:"small_str",sv:"Liten stege",en:"Small str.",sec:"lower",hint:"1-2-3-4-5 = 15",fixed:15,score:function(d){return has(d,[1,2,3,4,5])?15:0;}},
+        {key:"large_str",sv:"Stor stege",en:"Large str.",sec:"lower",hint:"2-3-4-5-6 = 20",fixed:20,score:function(d){return has(d,[2,3,4,5,6])?20:0;}},
+        {key:"full_str",sv:"Full stege",en:"Full str.",sec:"lower",hint:"1-2-3-4-5-6 = 21",fixed:21,score:function(d){return sortStr(d)==="123456"?21:0;}},
+        {key:"full_house",sv:"Kåk",en:"Full house",sec:"lower",hint:"Tretal + par (summa)",score:fhSum,max:28},
+        {key:"castle",sv:"Villa",en:"Castle",sec:"lower",hint:"Två tretal",score:function(d){var c=cnt(d),t=[],f;for(f=6;f>=1;f--)if(c[f]>=3)t.push(f);return t.length>=2?3*t[0]+3*t[1]:0;},max:33},
+        {key:"tower",sv:"Torn",en:"Tower",sec:"lower",hint:"Fyrtal + par",score:function(d){var f4=hi(d,4);if(!f4)return 0;var c=cnt(d),b;for(b=6;b>=1;b--)if(b!==f4&&c[b]>=2)return 4*f4+2*b;return 0;},max:34},
+        {key:"chance",sv:"Chans",en:"Chance",sec:"lower",hint:"Summa alla",score:function(d){return sum(d);},max:36},
+        {key:"maxi_yatzy",sv:"Maxi Yatzy",en:"Maxi Yatzy",sec:"lower",hint:"6 lika = 100",fixed:100,score:function(d){return hi(d,6)?100:0;}}
+      ])
+    },
+    yahtzee: {
+      id:"yahtzee", name:"Yahtzee (US)", short:"Yahtzee", dice:5, bonus:{at:63,val:35}, bonusHint:"vid 63 (+35)",
+      yBonus:{val:100, box:"yahtzee"},
+      cats: U.concat([
+        {key:"three_kind",sv:"Tretal",en:"3 of a kind",sec:"lower",hint:"≥3 lika = summa alla",score:function(d,ctx){return (hi(d,3)||isYtz(d,ctx))?sum(d):0;},max:30},
+        {key:"four_kind",sv:"Fyrtal",en:"4 of a kind",sec:"lower",hint:"≥4 lika = summa alla",score:function(d,ctx){return (hi(d,4)||isYtz(d,ctx))?sum(d):0;},max:30},
+        {key:"full_house",sv:"Kåk",en:"Full house",sec:"lower",hint:"Tretal + par = 25",fixed:25,score:function(d,ctx){if(isYtz(d,ctx))return 25;var t=hi(d,3);if(!t)return 0;var c=cnt(d),b;for(b=6;b>=1;b--)if(b!==t&&c[b]>=2)return 25;return 0;}},
+        {key:"small_str",sv:"Liten stege",en:"Small str.",sec:"lower",hint:"4 i rad = 30",fixed:30,score:function(d,ctx){if(isYtz(d,ctx))return 30;return (has(d,[1,2,3,4])||has(d,[2,3,4,5])||has(d,[3,4,5,6]))?30:0;}},
+        {key:"large_str",sv:"Stor stege",en:"Large str.",sec:"lower",hint:"5 i rad = 40",fixed:40,score:function(d,ctx){if(isYtz(d,ctx))return 40;return (has(d,[1,2,3,4,5])||has(d,[2,3,4,5,6]))?40:0;}},
+        {key:"chance",sv:"Chans",en:"Chance",sec:"lower",hint:"Summa alla",score:function(d){return sum(d);},max:30},
+        {key:"yahtzee",sv:"Yahtzee",en:"Yahtzee",sec:"lower",hint:"5 lika = 50",fixed:50,score:function(d){return hi(d,5)?50:0;}}
+      ])
+    }
+  };
+  // build lookup maps + section key lists
+  Object.keys(VARIANTS).forEach(function(id){
+    var V=VARIANTS[id]; V.map={}; V.upper=[]; V.lower=[];
+    V.cats.forEach(function(c){ V.map[c.key]=c; (c.sec==="upper"?V.upper:V.lower).push(c.key); });
+  });
+  function scoreCat(vid, key, dice, filled){
+    var c=VARIANTS[vid].map[key]; if(!c) return 0;
+    return c.score(dice, {variant:vid, filled:filled||{}});
   }
-  function esc(s) { return String(s).replace(/[&<>"']/g, function (m) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]; }); }
-  var toastTimer;
-  function toast(msg) {
-    var t = $("toast"); t.textContent = msg; t.classList.add("show");
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 1900);
-  }
+  // Expose for tests (harmless: a scoring reference + a capped delta log)
+  window.__YZ = { VARIANTS:VARIANTS, scoreCat:scoreCat, cnt:cnt, sum:sum, _log:[] };
 
-  // ---------------------------------------------------------------- Identity + room
+  // ============================================================ HELPERS
+  var $ = function(id){ return document.getElementById(id); };
+  var ROOM_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function rid(len, alpha){ alpha=alpha||ROOM_ALPHA; len=len||4; var s="",a=new Uint8Array(len),i;
+    if(window.crypto&&window.crypto.getRandomValues) window.crypto.getRandomValues(a); else for(i=0;i<len;i++) a[i]=Math.floor(Math.random()*256);
+    for(i=0;i<len;i++) s+=alpha[a[i]%alpha.length]; return s; }
+  function esc(s){ return String(s).replace(/[&<>"']/g,function(m){return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[m];}); }
+  var toastT; function toast(m){ var t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(function(){t.classList.remove("show");},1900); }
+  function die(){ return 1+Math.floor(Math.random()*6); }
+
+  // ============================================================ IDENTITY + ROOM
   var clientId = localStorage.getItem("yz_cid");
-  if (!clientId) { clientId = rid(8, "abcdefghijklmnopqrstuvwxyz0123456789"); localStorage.setItem("yz_cid", clientId); }
+  if(!clientId){ clientId=rid(8,"abcdefghijklmnopqrstuvwxyz0123456789"); localStorage.setItem("yz_cid",clientId); }
+  function currentRoom(){ var h=(location.hash||"").replace(/^#/,"").trim().toUpperCase(); return /^[A-Z0-9]{3,8}$/.test(h)?h:null; }
+  var room=currentRoom(); if(!room){ room=rid(4); history.replaceState(null,"","#"+room); }
+  var TOPIC="kindfilter_yatzy_v3_"+room, NTFY="https://ntfy.sh/", storeKey="yz3_"+room, meKey="yzme_"+room;
+  var mePid = localStorage.getItem(meKey) || null;
 
-  function currentRoom() {
-    var h = (location.hash || "").replace(/^#/, "").trim().toUpperCase();
-    if (/^[A-Z0-9]{3,8}$/.test(h)) return h;
-    return null;
-  }
-  var room = currentRoom();
-  if (!room) { room = rid(4); history.replaceState(null, "", "#" + room); }
-  var topic = TOPIC_PREFIX + room;
-  var storeKey = "yz_state_" + room;
+  // ============================================================ STATE
+  function blankGame(no){ return { no:no||1, scores:{}, ybonus:{}, clearedAt:0, live:{turnPid:null,rollNo:0,values:[],held:[],seq:0,ts:0,cid:""}, startedTs:0, done:false }; }
+  var state = { v:3, cfg:{ variant:"yatzy", mode:"digital", series:{format:"single",n:3,target:1000,rankBy:"points"}, ts:0, cid:"" },
+                players:{}, order:[], game:blankGame(1), history:[] };
 
-  // ---------------------------------------------------------------- State
-  var state = { players: {}, order: [], scores: {}, clearedAt: 0 };
+  function loadLocal(){ try{ var raw=localStorage.getItem(storeKey); if(raw){ var s=JSON.parse(raw); if(s&&s.players) state=s; } }catch(e){}
+    if(!state.players) state.players={}; if(!state.order) state.order=Object.keys(state.players);
+    if(!state.cfg) state.cfg={variant:"yatzy",mode:"digital",series:{format:"single",n:3,target:1000,rankBy:"points"},ts:0,cid:""};
+    if(!state.cfg.series) state.cfg.series={format:"single",n:3,target:1000,rankBy:"points"};
+    if(!state.game) state.game=blankGame(1); if(!state.game.live) state.game.live={turnPid:null,rollNo:0,values:[],held:[],seq:0,ts:0,cid:""};
+    if(!state.game.ybonus) state.game.ybonus={}; if(!state.history) state.history=[];
+    if(!VARIANTS[state.cfg.variant]) state.cfg.variant="yatzy";
+  }
+  function saveLocal(){ try{ localStorage.setItem(storeKey,JSON.stringify(state)); }catch(e){} }
 
-  function loadLocal() {
-    try {
-      var raw = localStorage.getItem(storeKey);
-      if (raw) { var s = JSON.parse(raw); if (s && s.players) state = s; }
-    } catch (e) {}
-    if (!state.players) state.players = {};
-    if (!state.scores) state.scores = {};
-    if (!state.order) state.order = Object.keys(state.players);
-    if (!state.clearedAt) state.clearedAt = 0;
-  }
-  function saveLocal() { try { localStorage.setItem(storeKey, JSON.stringify(state)); } catch (e) {} }
+  function V(){ return VARIANTS[state.cfg.variant]; }
+  function playerList(){ return state.order.filter(function(id){return state.players[id];}); }
+  function ensureScore(pid){ if(!state.game.scores[pid]) state.game.scores[pid]={}; return state.game.scores[pid]; }
+  function cellVal(pid,key){ var c=state.game.scores[pid]&&state.game.scores[pid][key]; return c&&c.v!=null?c.v:null; }
+  function hasCell(pid,key){ var c=state.game.scores[pid]&&state.game.scores[pid][key]; return !!(c&&c.v!=null); }
+  function filledMap(pid){ var m={},s=state.game.scores[pid]||{},k; for(k in s) if(s[k]&&s[k].v!=null) m[k]=true; return m; }
 
-  function playerList() { return state.order.filter(function (id) { return state.players[id]; }); }
-  function ensureScore(pid) { if (!state.scores[pid]) state.scores[pid] = {}; return state.scores[pid]; }
-  function cellVal(pid, cat) {
-    var c = state.scores[pid] && state.scores[pid][cat];
-    return c && c.v != null ? c.v : null;
+  // ============================================================ DERIVED
+  function derive(pid){
+    var v=V(), up=0, upN=0;
+    v.upper.forEach(function(k){ if(hasCell(pid,k)){ up+=cellVal(pid,k); upN++; } });
+    var bonus = up>=v.bonus.at ? v.bonus.val : 0;
+    var low=0; v.lower.forEach(function(k){ if(hasCell(pid,k)) low+=cellVal(pid,k); });
+    var yb = state.game.ybonus[pid]||0;
+    var filled=0; v.cats.forEach(function(c){ if(hasCell(pid,c.key)) filled++; });
+    return { upper:up, upperFilled:upN, bonus:bonus, lower:low, ybonus:yb,
+      total:up+bonus+low+yb, filled:filled, remaining:v.cats.length-filled, toBonus:Math.max(0,v.bonus.at-up) };
   }
-  function hasCell(pid, cat) {
-    var c = state.scores[pid] && state.scores[pid][cat];
-    return !!(c && c.v != null);
+  function gameComplete(){ var pl=playerList(); if(!pl.length) return false; var n=V().cats.length; return pl.every(function(pid){ var f=0; V().cats.forEach(function(c){ if(hasCell(pid,c.key)) f++; }); return f===n; }); }
+  function tiedSort(a,b){ return b.total-a.total || b.upper-b.upper || b.bonus-a.bonus || (b.yc||0)-(a.yc||0); }
+  function computeResults(){ // for gameover: results map + winner order
+    var pl=playerList(), res={}, arr=[];
+    pl.forEach(function(pid){ var d=derive(pid); var yc = ycount(pid);
+      res[pid]={ total:d.total, upper:d.upper, bonus:d.bonus, lower:d.lower, ybonus:d.ybonus, yc:yc };
+      arr.push({pid:pid, total:d.total, upper:d.upper, bonus:d.bonus, yc:yc }); });
+    arr.sort(function(a,b){ return b.total-a.total || b.upper-a.upper || b.bonus-a.bonus || b.yc-a.yc; });
+    var top=arr[0], winners=[]; if(top){ arr.forEach(function(x){ if(x.total===top.total&&x.upper===top.upper&&x.bonus===top.bonus&&x.yc===top.yc) winners.push(x.pid); }); }
+    return { results:res, winner:winners, order:arr.map(function(x){return x.pid;}) };
   }
+  function ycount(pid){ var vid=state.cfg.variant, key=vid==="yahtzee"?"yahtzee":(vid==="maxi"?"maxi_yatzy":"yatzy");
+    var base = cellVal(pid,key)>0?1:0; var yb=(state.game.ybonus[pid]||0)/100; return base+yb; }
 
-  // ---------------------------------------------------------------- Derived
-  function derive(pid) {
-    var up = 0, upFilled = 0;
-    UPPER_KEYS.forEach(function (k) { if (hasCell(pid, k)) { up += cellVal(pid, k); upFilled++; } });
-    var bonus = up >= BONUS_LIMIT ? BONUS_VALUE : 0;
-    var low = 0;
-    LOWER_KEYS.forEach(function (k) { if (hasCell(pid, k)) low += cellVal(pid, k); });
-    var filled = 0;
-    CATS.forEach(function (c) { if (hasCell(pid, c.key)) filled++; });
-    return {
-      upper: up, upperFilled: upFilled, bonus: bonus, lower: low,
-      total: up + bonus + low, filled: filled, remaining: CATS.length - filled,
-      toBonus: Math.max(0, BONUS_LIMIT - up)
-    };
+  // Series standings from history (current variant)
+  function seriesGames(){ return state.history.filter(function(g){ return g.variant===state.cfg.variant; }); }
+  function nextGameNo(){ var mx=0; state.history.forEach(function(h){ if(h.variant===state.cfg.variant && h.no>mx) mx=h.no; }); return mx+1; }
+  function standings(){
+    var games=seriesGames(), pl=playerList(), st={};
+    pl.forEach(function(pid){ st[pid]={pid:pid,name:state.players[pid]?state.players[pid].name:"?",wins:0,points:0,played:0,best:0}; });
+    games.forEach(function(g){ Object.keys(g.results).forEach(function(pid){ if(!st[pid]) st[pid]={pid:pid,name:(state.players[pid]?state.players[pid].name:"?"),wins:0,points:0,played:0,best:0};
+      var r=g.results[pid]; st[pid].points+=r.total; st[pid].played++; if(r.total>st[pid].best) st[pid].best=r.total; if(g.winner.indexOf(pid)>=0) st[pid].wins+= (1/g.winner.length); }); });
+    var arr=Object.keys(st).map(function(k){return st[k];});
+    var rankBy = state.cfg.series.rankBy;
+    arr.sort(function(a,b){ if(state.cfg.series.format==="matches"&&rankBy==="wins") return b.wins-a.wins||b.points-a.points||b.best-a.best;
+      return b.points-a.points||b.wins-a.wins||b.best-a.best; });
+    return { arr:arr, games:games.length };
   }
-
-  // ---------------------------------------------------------------- Sync (ntfy)
-  var es = null;
-  function setStatus(kind) {
-    var dot = $("statusDot"), txt = $("statusText");
-    dot.className = "dot " + (kind === "live" ? "live" : kind === "off" ? "off" : "");
-    txt.textContent = kind === "live" ? "Live – alla ser samma tavla" : kind === "off" ? "Offline – sparat lokalt" : "Ansluter…";
-  }
-  function publish(delta) {
-    if (!navigator.onLine) return;
-    try {
-      fetch(NTFY + topic, { method: "POST", body: JSON.stringify(delta), keepalive: true }).catch(function () {});
-    } catch (e) {}
-  }
-  function connect() {
-    if (es) { try { es.close(); } catch (e) {} }
-    if (!window.EventSource) { setStatus("off"); return; }
-    try { es = new EventSource(NTFY + topic + "/sse?since=all"); }
-    catch (e) { setStatus("off"); return; }
-    es.onopen = function () { setStatus("live"); };
-    es.onmessage = function (e) {
-      try {
-        var env = JSON.parse(e.data);
-        if (env.event && env.event !== "message") return;
-        if (!env.message) return;
-        applyDelta(JSON.parse(env.message), false);
-      } catch (err) {}
-    };
-    es.onerror = function () { setStatus(navigator.onLine ? "connecting" : "off"); };
+  function seriesDone(){
+    var s=state.cfg.series, g=seriesGames();
+    if(s.format==="matches") return g.length>=s.n && g.length>0;
+    if(s.format==="race"){ var st=standings().arr; return st.length>0 && st[0].points>=s.target; }
+    return false;
   }
 
-  // ---------------------------------------------------------------- Apply deltas
-  function applyDelta(d, isLocal) {
-    if (!d || !d.t) return;
-    var changed = false;
-    if (d.t === "player") {
-      if (!state.players[d.id]) { state.players[d.id] = { name: d.name || "Spelare", ct: d.ts || 0, nameTs: d.ts || 0 }; changed = true; }
-      else if (d.name && (d.ts || 0) >= (state.players[d.id].nameTs || 0) && state.players[d.id].name !== d.name) {
-        state.players[d.id].name = d.name; state.players[d.id].nameTs = d.ts || 0; changed = true;
+  // Career stats from history (current variant)
+  function statsFor(pid){
+    var games=state.history.filter(function(g){ return g.variant===state.cfg.variant && g.results[pid]; });
+    var n=games.length; if(!n) return null;
+    var wins=0,total=0,best=0,bonusN=0,upTot=0,yc=0, streak=0, cur=0;
+    games.forEach(function(g){ var r=g.results[pid]; total+=r.total; if(r.total>best) best=r.total; if(r.bonus>0) bonusN++; upTot+=r.upper; yc+=(r.yc||0);
+      if(g.winner.indexOf(pid)>=0){ cur++; if(cur>streak) streak=cur; } else cur=0; });
+    // wins counting fractional co-wins as full for display
+    games.forEach(function(g){ if(g.winner.indexOf(pid)>=0) wins++; });
+    return { games:n, wins:wins, winPct:Math.round(wins/n*100), avg:Math.round(total/n), best:best,
+      bonusPct:Math.round(bonusN/n*100), avgUpper:Math.round(upTot/n), yatzys:yc, streak:streak };
+  }
+
+  // ============================================================ SYNC (ntfy)
+  var es=null, lastSeq=-1;
+  function setStatus(kind){ var d=$("statusDot"),t=$("statusText");
+    d.className="dot "+(kind==="live"?"live":kind==="off"?"off":"");
+    t.textContent=kind==="live"?"Live – alla ser samma tavla":kind==="off"?"Offline – sparat lokalt":"Ansluter…"; }
+  function publish(delta){ if(!navigator.onLine) return; try{ fetch(NTFY+TOPIC,{method:"POST",body:JSON.stringify(delta),keepalive:true}).catch(function(){}); }catch(e){} }
+  function connect(){ if(es){try{es.close();}catch(e){}} if(!window.EventSource){ setStatus("off"); return; }
+    try{ es=new EventSource(NTFY+TOPIC+"/sse?since=all"); }catch(e){ setStatus("off"); return; }
+    es.onopen=function(){ setStatus("live"); };
+    es.onmessage=function(e){ try{ var env=JSON.parse(e.data); if(env.event&&env.event!=="message") return; if(!env.message) return; applyDelta(JSON.parse(env.message),false); }catch(err){} };
+    es.onerror=function(){ setStatus(navigator.onLine?"connecting":"off"); };
+  }
+
+  function applyDelta(d, isLocal){
+    if(!d||!d.t) return; var changed=false, g=state.game;
+    if(d.t==="cfg"){
+      if((d.ts||0)>=(state.cfg.ts||0)){ state.cfg.variant=d.cfg.variant; state.cfg.mode=d.cfg.mode; state.cfg.series=d.cfg.series; state.cfg.ts=d.ts||0; state.cfg.cid=d.cid;
+        if(!VARIANTS[state.cfg.variant]) state.cfg.variant="yatzy"; changed=true; }
+    } else if(d.t==="player"){
+      if(!state.players[d.id]){ state.players[d.id]={name:d.name||"Spelare",ct:d.ts||0,nameTs:d.ts||0}; changed=true; }
+      else if(d.name&&(d.ts||0)>=(state.players[d.id].nameTs||0)&&state.players[d.id].name!==d.name){ state.players[d.id].name=d.name; state.players[d.id].nameTs=d.ts||0; changed=true; }
+      if(state.order.indexOf(d.id)===-1){ state.order.push(d.id); changed=true; }
+      state.order.sort(function(a,b){ return (state.players[a]?state.players[a].ct||0:0)-(state.players[b]?state.players[b].ct||0:0); });
+      if(!g.live.turnPid && state.cfg.mode==="digital"){ g.live.turnPid=playerList()[0]||null; }
+    } else if(d.t==="removePlayer"){
+      if(state.players[d.id]){ delete state.players[d.id]; delete g.scores[d.id]; var ix=state.order.indexOf(d.id); if(ix>=0) state.order.splice(ix,1);
+        if(g.live.turnPid===d.id) g.live.turnPid=playerList()[0]||null; changed=true; }
+    } else if(d.t==="score"){
+      if((d.ts||0)>g.clearedAt){ var sc=ensureScore(d.pid), ex=sc[d.cat];
+        if(!ex||(d.ts||0)>(ex.ts||0)||((d.ts||0)===(ex.ts||0)&&String(d.cid)>String(ex.cid||""))){
+          if(d.v==null){ if(ex){ delete sc[d.cat]; changed=true; } } else { sc[d.cat]={v:d.v,ts:d.ts||0,cid:d.cid}; changed=true; } } }
+    } else if(d.t==="commit"){
+      if((d.ts||0)>g.clearedAt){ var sc2=ensureScore(d.pid), ex2=sc2[d.cat];
+        if(!ex2||(d.ts||0)>(ex2.ts||0)){ sc2[d.cat]={v:d.v,ts:d.ts||0,cid:d.cid}; changed=true; }
+        if(d.yb){ g.ybonus[d.pid]=(g.ybonus[d.pid]||0)+d.yb; changed=true; }
+        if(d.next && (d.ts||0)>=(g.live.ts||0)){ g.live={turnPid:d.next.turnPid,rollNo:0,values:[],held:[],seq:(g.live.seq||0)+1,ts:d.ts||0,cid:d.cid}; changed=true; } }
+    } else if(d.t==="live"){
+      if((d.ts||0)>(g.live.ts||0)){ g.live={turnPid:d.turnPid,rollNo:d.rollNo,values:d.values||[],held:d.held||[],seq:d.seq||0,ts:d.ts||0,cid:d.cid,rolled:d.rolled};
+        changed=true;
+        if(d.rolled && d.seq>lastSeq){ lastSeq=d.seq; queueAnim(d.values,d.held); } }
+    } else if(d.t==="gameover"){
+      if(d.no===g.no){
+        if(!state.history.some(function(h){return h.no===d.no&&h.variant===(d.variant||state.cfg.variant);}))
+          state.history.push({no:d.no,ts:d.ts||0,variant:d.variant||state.cfg.variant,results:d.results,winner:d.winner,order:d.order});
+        state.game=blankGame(nextGameNo()); state.game.clearedAt=d.ts||0; state.game.live.turnPid=playerList()[0]||null; state.game.startedTs=d.ts||0;
+        changed=true;
       }
-      if (state.order.indexOf(d.id) === -1) { state.order.push(d.id); changed = true; }
-      state.order.sort(function (a, b) { return (state.players[a] ? state.players[a].ct || 0 : 0) - (state.players[b] ? state.players[b].ct || 0 : 0); });
-    } else if (d.t === "removePlayer") {
-      if (state.players[d.id]) {
-        delete state.players[d.id]; delete state.scores[d.id];
-        var ix = state.order.indexOf(d.id); if (ix >= 0) state.order.splice(ix, 1);
-        changed = true;
-      }
-    } else if (d.t === "score") {
-      if ((d.ts || 0) > state.clearedAt) {
-        var sc = ensureScore(d.pid), ex = sc[d.cat];
-        if (!ex || (d.ts || 0) > (ex.ts || 0) || ((d.ts || 0) === (ex.ts || 0) && String(d.cid) > String(ex.cid || ""))) {
-          if (d.v == null) { if (ex) { delete sc[d.cat]; changed = true; } }
-          else { sc[d.cat] = { v: d.v, ts: d.ts || 0, cid: d.cid }; changed = true; }
+    } else if(d.t==="resetgame"){
+      if((d.ts||0)>(g.clearedAt||0)){ state.game=blankGame(nextGameNo()); state.game.clearedAt=d.ts||0; state.game.live.turnPid=playerList()[0]||null; changed=true; }
+    } else if(d.t==="newseries"){
+      if((d.ts||0)>(g.clearedAt||0)){ state.history=state.history.filter(function(h){return h.variant!==state.cfg.variant;}); state.game=blankGame(1); state.game.clearedAt=d.ts||0; state.game.live.turnPid=playerList()[0]||null; changed=true; }
+    }
+    if(changed){ saveLocal(); renderAll(); }
+  }
+  function emit(delta){ delta.cid=clientId; delta.ts=Date.now(); applyDelta(delta,true); publish(delta);
+    try{ if(window.__YZ){ window.__YZ._log.push(JSON.parse(JSON.stringify(delta))); if(window.__YZ._log.length>2000) window.__YZ._log.shift(); } }catch(e){} }
+  window.__YZ.apply = function(d){ applyDelta(d,false); };
+  window.__YZ.snapshot = function(){ var pl=playerList(); return { players:pl.map(function(id){return state.players[id].name;}),
+    variant:state.cfg.variant, mode:state.cfg.mode, series:state.cfg.series,
+    totals:pl.map(function(id){return derive(id).total;}), historyLen:state.history.length,
+    hvariants:state.history.map(function(h){return h.variant+"#"+h.no;}) }; };
+
+  // ============================================================ ACTIONS
+  function addPlayer(name){ name=(name||"").trim()||("Spelare "+(playerList().length+1)); emit({t:"player",id:rid(6,"abcdefghijklmnopqrstuvwxyz0123456789"),name:name}); }
+  function renamePlayer(id,name){ name=(name||"").trim(); if(name) emit({t:"player",id:id,name:name}); }
+  function removePlayer(id){ emit({t:"removePlayer",id:id}); }
+  function setScore(pid,cat,v){ emit({t:"score",pid:pid,cat:cat,v:v}); maybeGameOver(); }
+  function clearScore(pid,cat){ emit({t:"score",pid:pid,cat:cat,v:null}); }
+  function setConfig(cfg){ emit({t:"cfg",cfg:cfg}); }
+  function newSeries(){ emit({t:"newseries"}); toast("Ny serie startad"); }
+
+  function nextTurnPid(pid){ var pl=playerList(); if(!pl.length) return null; var i=pl.indexOf(pid); return pl[(i+1)%pl.length]; }
+  function maybeGameOver(){ if(gameComplete() && !state.game.done){ var r=computeResults(); emit({t:"gameover",no:state.game.no,variant:state.cfg.variant,results:r.results,winner:r.winner,order:r.order}); showWinnerSheet(r); } }
+
+  // Dice
+  function myTurn(){ return state.cfg.mode==="digital" && state.game.live.turnPid; }
+  function rollDice(){
+    var g=state.game, live=g.live; if(state.cfg.mode!=="digital") return; if(!live.turnPid) live.turnPid=playerList()[0];
+    if(live.rollNo>=3) return;
+    var n=V().dice, vals=[], held=live.held.slice(); if(live.values.length!==n){ vals=[]; held=[]; for(var i=0;i<n;i++){ vals.push(die()); held.push(false); } }
+    else { for(var j=0;j<n;j++){ vals.push(held[j]?live.values[j]:die()); } }
+    var seq=(live.seq||0)+1; lastSeq=seq;
+    emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:vals,held:held,seq:seq,rolled:true});
+    queueAnim(vals,held);
+  }
+  function queueAnim(vals,held){ setTimeout(function(){ animateRoll(vals,held); },0); }
+  function toggleHold(i){ var g=state.game,live=g.live; if(state.cfg.mode!=="digital"||live.rollNo<1) return; if(i>=V().dice) return;
+    var held=live.held.slice(); held[i]=!held[i]; emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo,values:live.values.slice(),held:held,seq:(live.seq||0)+1,rolled:false}); }
+  function commit(pid,cat){
+    var g=state.game, live=g.live; var dice=live.values.slice(0,V().dice);
+    var v=scoreCat(state.cfg.variant,cat,dice,filledMap(pid));
+    var yb=0; if(state.cfg.variant==="yahtzee" && hi(dice,5)>0 && cellVal(pid,"yahtzee")===50) yb=100;
+    var next=nextTurnPid(pid);
+    emit({t:"commit",pid:pid,cat:cat,v:v,yb:yb,next:{turnPid:next}});
+    if(yb) toast("Yahtzee-bonus! +100 🎉");
+    maybeGameOver();
+  }
+
+  // ============================================================ DICE ANIMATION
+  var rollTimer=null, dieEls=[];
+  function buildTray(){ /* handled in renderBottom */ }
+  function animateRoll(vals, held){
+    var els=document.querySelectorAll("#dicerow .die"); if(!els.length) return;
+    clearInterval(rollTimer); var t=0, n=V().dice;
+    rollTimer=setInterval(function(){
+      for(var i=0;i<els.length;i++){ if(i>=n){ continue; } var el=els[i]; if(held[i]){ setPips(el,vals[i]); continue; } setPips(el, die()); el.classList.add("rolling"); }
+      t+=80; if(t>=520){ clearInterval(rollTimer); for(var k=0;k<els.length;k++){ if(k>=n) continue; setPips(els[k],vals[k]); els[k].classList.remove("rolling"); els[k].classList.toggle("held",!!held[k]); els[k].classList.remove("blank"); } }
+    },80);
+  }
+  var PIPS={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+  function setPips(el,val){ var on=PIPS[val]||[]; var ps=el.querySelectorAll(".pip"); for(var i=0;i<9;i++){ ps[i].className="pip"+(on.indexOf(i)>=0?" on":""); } el.classList.remove("blank"); }
+
+  // ============================================================ RENDER
+  var tab="play";
+  function renderAll(){ renderHeader(); renderTabs(); if(tab==="play") renderPlay(); else if(tab==="standings") renderStandings(); else renderStats(); renderBottom(); }
+  function renderHeader(){ $("roomCode").textContent=room; $("vbadge").textContent=V().short; }
+  function renderTabs(){
+    var series = state.cfg.series.format!=="single";
+    $("tabStandings").classList.toggle("hidden", !series);
+    if(tab==="standings" && !series) tab="play";
+    ["play","standings","stats"].forEach(function(t){ var b=document.querySelector('.tab[data-tab="'+t+'"]'); if(b) b.classList.toggle("active",t===tab); $("view-"+t).classList.toggle("active",t===tab); });
+  }
+
+  function renderPlay(){
+    var host=$("boardHost"), pl=playerList();
+    if(pl.length===0){ host.innerHTML=welcomeHTML(); $("winner").classList.remove("show"); $("turnBanner").innerHTML=""; return; }
+    var v=V(), d={}; pl.forEach(function(id){ d[id]=derive(id); });
+    var allDone=gameComplete(), maxTotal=-1; pl.forEach(function(id){ if(d[id].total>maxTotal) maxTotal=d[id].total; });
+    var live=state.game.live, turnPid=state.cfg.mode==="digital"?live.turnPid:null;
+    var dice=live.values.slice(0,v.dice), canPreview = state.cfg.mode==="digital" && live.rollNo>=1 && dice.length===v.dice;
+
+    var html='<div class="board-wrap"><table class="board"><thead><tr><th class="corner">'+esc(v.name)+'</th>';
+    pl.forEach(function(id){ var pd=d[id]; var isWin=allDone&&pd.total===maxTotal; var active=(id===turnPid);
+      var meta = allDone ? (isWin?"🏆":"Klar") : (id===turnPid?"◀ tur":(pd.remaining+" kvar"));
+      html+='<th class="player'+(active?" active":"")+'" data-player="'+id+'"><div class="phead"><span class="pname">'+esc(state.players[id].name)+(id===mePid?' <span class="me">(du)</span>':'')+'</span><span class="ptotal">'+pd.total+'</span><span class="pmeta'+(isWin?" win":"")+'">'+meta+'</span></div></th>'; });
+    html+='<th class="addcol"><button class="addbtn" id="addColBtn">＋</button></th></tr></thead><tbody>';
+    html+=secRow("Övre delen",pl.length);
+    v.upper.forEach(function(k){ html+=catRow(v.map[k],pl,turnPid,canPreview,dice); });
+    html+=sumRow("Summa övre",pl,function(id){return String(d[id].upper);});
+    html+=bonusRow(pl,d,v);
+    html+=secRow("Nedre delen",pl.length);
+    v.lower.forEach(function(k){ html+=catRow(v.map[k],pl,turnPid,canPreview,dice); });
+    if(state.cfg.variant==="yahtzee") html+=ybonusRow(pl,d);
+    html+=totalRow(pl,d);
+    html+='</tbody></table></div>';
+    host.innerHTML=html;
+
+    // winner banner
+    var w=$("winner");
+    if(allDone && pl.length>0){ var winners=pl.filter(function(id){return d[id].total===maxTotal;}); var names=winners.map(function(id){return state.players[id].name;}).join(" & ");
+      $("winnerText").innerHTML=esc(names)+(winners.length>1?" delar segern!":" vinner spelet!")+"<small>"+maxTotal+" poäng · spel "+state.game.no+"</small>"; w.classList.add("show"); }
+    else w.classList.remove("show");
+
+    // turn banner
+    var tb=$("turnBanner");
+    if(state.cfg.mode==="digital" && !allDone && turnPid){ var isYou=(turnPid===mePid);
+      tb.innerHTML='<div class="banner turn'+(isYou?" you":"")+'"><span class="em">🎲</span><span>'+(isYou?"Din tur":esc(state.players[turnPid].name)+"s tur")+'<span class="sub">'+(live.rollNo===0?"Tryck Kasta för att börja":("Kast "+live.rollNo+"/3 · lås tärningar och tryck en kategori"))+'</span></span></div>'; }
+    else tb.innerHTML="";
+  }
+  function secRow(t,n){ return '<tr class="sec"><th colspan="'+(n+2)+'">'+t+'</th></tr>'; }
+  function catRow(cat,pl,turnPid,canPreview,dice){
+    var row='<tr><td class="cat">'+esc(cat.sv)+'<small>'+esc(cat.hint||"")+'</small></td>';
+    pl.forEach(function(id){
+      var has=hasCell(id,cat.key), val=cellVal(id,cat.key);
+      if(has){ var cls="cell "+(val===0?"zero":"filled"); if(state.cfg.mode==="manual") cls+=" tap";
+        row+='<td class="'+cls+'" data-player="'+id+'" data-cat="'+cat.key+'"><span class="val">'+val+'</span></td>'; }
+      else {
+        if(state.cfg.mode==="digital"){
+          if(id===turnPid && canPreview){ var pv=scoreCat(state.cfg.variant,cat.key,dice,filledMap(id));
+            row+='<td class="cell tap preview'+(pv===0?" zero":"")+'" data-player="'+id+'" data-cat="'+cat.key+'" data-commit="1"><span class="val">'+pv+'</span></td>'; }
+          else row+='<td class="cell empty" data-player="'+id+'" data-cat="'+cat.key+'"><span class="val">·</span></td>';
+        } else {
+          row+='<td class="cell empty tap" data-player="'+id+'" data-cat="'+cat.key+'"><span class="val">＋</span></td>';
         }
       }
-    } else if (d.t === "reset") {
-      if ((d.ts || 0) > state.clearedAt) {
-        state.clearedAt = d.ts || 0;
-        Object.keys(state.scores).forEach(function (pid) {
-          var sc = state.scores[pid];
-          Object.keys(sc).forEach(function (cat) { if ((sc[cat].ts || 0) <= state.clearedAt) delete sc[cat]; });
-        });
-        changed = true;
-      }
-    }
-    if (changed) { saveLocal(); render(); }
-  }
-
-  function emit(delta) {
-    delta.cid = clientId;
-    delta.ts = Date.now();
-    applyDelta(delta, true);
-    publish(delta);
-  }
-
-  // ---------------------------------------------------------------- Actions
-  function addPlayer(name) {
-    name = (name || "").trim() || ("Spelare " + (playerList().length + 1));
-    emit({ t: "player", id: rid(6, "abcdefghijklmnopqrstuvwxyz0123456789"), name: name });
-  }
-  function renamePlayer(id, name) { name = (name || "").trim(); if (name) emit({ t: "player", id: id, name: name }); }
-  function removePlayer(id) { emit({ t: "removePlayer", id: id }); }
-  function setScore(pid, cat, value) { emit({ t: "score", pid: pid, cat: cat, v: value }); }
-  function clearScore(pid, cat) { emit({ t: "score", pid: pid, cat: cat, v: null }); }
-  function resetGame() { emit({ t: "reset" }); }
-
-  // ---------------------------------------------------------------- Render
-  function render() {
-    $("roomCode").textContent = room;
-    var players = playerList();
-    var host = $("boardHost");
-
-    if (players.length === 0) {
-      host.innerHTML =
-        '<div class="empty-state"><div class="big">🎲</div>' +
-        '<h2>Dags att spela Yatzy!</h2>' +
-        '<p>Lägg till spelarna och fyll i poängen efter varje omgång.<br>Dela rummet så ser alla samma tavla på sin telefon.</p></div>';
-      $("winner").classList.remove("show");
-      return;
-    }
-
-    var d = {};
-    players.forEach(function (id) { d[id] = derive(id); });
-    var allDone = true, maxTotal = -1;
-    players.forEach(function (id) { if (d[id].remaining > 0) allDone = false; if (d[id].total > maxTotal) maxTotal = d[id].total; });
-
-    var html = '<div class="board-wrap"><table class="board"><thead><tr>';
-    html += '<th class="corner">Kategori</th>';
-    players.forEach(function (id) {
-      var pd = d[id];
-      var isWin = allDone && pd.total === maxTotal;
-      var meta = pd.remaining > 0 ? (pd.remaining + " kvar") : (isWin ? "🏆 Vinnare" : "Klar");
-      html += '<th class="player" data-player="' + id + '"><div class="phead">' +
-        '<span class="pname">' + esc(state.players[id].name) + '</span>' +
-        '<span class="ptotal">' + pd.total + '</span>' +
-        '<span class="pmeta' + (isWin ? " win" : "") + '">' + meta + '</span></div></th>';
     });
-    html += '<th class="addcol"><button class="addbtn" id="addColBtn" aria-label="Lägg till spelare">＋</button></th></tr></thead><tbody>';
+    return row+'<td class="addcol"></td></tr>';
+  }
+  function sumRow(label,pl,fn){ var row='<tr class="summary"><td class="cat">'+esc(label)+'</td>'; pl.forEach(function(id){ row+='<td class="cell">'+fn(id)+'</td>'; }); return row+'<td class="addcol"></td></tr>'; }
+  function bonusRow(pl,d,v){ var row='<tr class="summary"><td class="cat">Bonus<small>'+esc(v.bonusHint)+'</small></td>';
+    pl.forEach(function(id){ var pd=d[id],c; if(pd.bonus>0) c='+'+v.bonus.val+'<span class="bonus-need bonus-ok">✓ klar</span>'; else c='0<span class="bonus-need">'+pd.toBonus+' kvar</span>'; row+='<td class="cell">'+c+'</td>'; });
+    return row+'<td class="addcol"></td></tr>'; }
+  function ybonusRow(pl,d){ var row='<tr class="summary"><td class="cat">Yahtzee-bonus<small>+100 per extra</small></td>'; pl.forEach(function(id){ row+='<td class="cell">'+(d[id].ybonus?("+"+d[id].ybonus):"0")+'</td>'; }); return row+'<td class="addcol"></td></tr>'; }
+  function totalRow(pl,d){ var row='<tr class="summary total"><td class="cat">Totalt</td>'; pl.forEach(function(id){ row+='<td class="cell">'+d[id].total+'</td>'; }); return row+'<td class="addcol"></td></tr>'; }
 
-    html += secRow("Övre delen", players.length);
-    UPPER_KEYS.forEach(function (k) { html += catRow(CAT_BY_KEY[k], players); });
-    html += summaryRow("Summa övre", players, function (id) { return String(d[id].upper); });
-    html += bonusRow(players, d);
-    html += secRow("Nedre delen", players.length);
-    LOWER_KEYS.forEach(function (k) { html += catRow(CAT_BY_KEY[k], players); });
-    html += totalRow(players, d);
-    html += '</tbody></table></div>';
-    host.innerHTML = html;
-
-    var w = $("winner");
-    if (allDone && players.length > 1) {
-      var winners = players.filter(function (id) { return d[id].total === maxTotal; });
-      var names = winners.map(function (id) { return state.players[id].name; }).join(" & ");
-      $("winnerText").innerHTML = esc(names) + " vinner!<small>" + maxTotal + " poäng</small>";
-      w.classList.add("show");
-    } else { w.classList.remove("show"); }
+  function welcomeHTML(){
+    var s=state.cfg;
+    var modeTxt = s.mode==="digital"?"digitala tärningar":"egna tärningar";
+    var serieTxt = s.series.format==="single"?"Enkel match":(s.series.format==="matches"?(s.series.n+" matcher"):("Först till "+s.series.target));
+    return '<div class="empty-state"><div class="big">🎲</div><h2>Dags att spela Yatzy!</h2>'+
+      '<p>Lägg till spelarna så kör vi. Alla ser samma tavla på sin telefon.</p>'+
+      '<button class="cta" id="welcomeAdd">＋ Lägg till spelare</button>'+
+      '<div class="muted-note" style="margin-top:16px">Läge: <b>'+esc(V().name)+'</b> · '+modeTxt+' · '+serieTxt+'<br><a href="#" id="welcomeSetup" style="color:var(--brand);font-weight:700">Ändra inställningar</a></div></div>';
   }
 
-  function secRow(title, n) { return '<tr class="sec"><th colspan="' + (n + 2) + '">' + title + '</th></tr>'; }
-  function catRow(cat, players) {
-    var row = '<tr><td class="cat">' + esc(cat.label) + '<small>' + esc(cat.hint) + '</small></td>';
-    players.forEach(function (id) {
-      var v = cellVal(id, cat.key), has = hasCell(id, cat.key);
-      var cls = "cell " + (!has ? "empty" : (v === 0 ? "zero" : "filled"));
-      var disp = !has ? "＋" : String(v);
-      row += '<td class="' + cls + '" data-player="' + id + '" data-cat="' + cat.key + '"><span class="val">' + disp + '</span></td>';
-    });
-    return row + '<td class="addcol"></td></tr>';
-  }
-  function summaryRow(label, players, fn) {
-    var row = '<tr class="summary"><td class="cat">' + esc(label) + '</td>';
-    players.forEach(function (id) { row += '<td class="cell">' + fn(id) + '</td>'; });
-    return row + '<td class="addcol"></td></tr>';
-  }
-  function bonusRow(players, d) {
-    var row = '<tr class="summary"><td class="cat">Bonus<small>vid ' + BONUS_LIMIT + ' (+' + BONUS_VALUE + ')</small></td>';
-    players.forEach(function (id) {
-      var pd = d[id], cell;
-      if (pd.bonus > 0) cell = '+' + BONUS_VALUE + '<span class="bonus-need bonus-ok">✓ klar</span>';
-      else cell = '0<span class="bonus-need">' + pd.toBonus + ' kvar</span>';
-      row += '<td class="cell">' + cell + '</td>';
-    });
-    return row + '<td class="addcol"></td></tr>';
-  }
-  function totalRow(players, d) {
-    var row = '<tr class="summary total"><td class="cat">Totalt</td>';
-    players.forEach(function (id) { row += '<td class="cell">' + d[id].total + '</td>'; });
-    return row + '<td class="addcol"></td></tr>';
+  function renderStandings(){
+    var host=$("standingsHost"), s=state.cfg.series;
+    if(s.format==="single"){ host.innerHTML='<div class="muted-note">Enkel match – ingen serie.<br><a href="#" id="toSetup2" style="color:var(--brand);font-weight:700">Starta en serie i inställningar</a></div>'; var t=$("toSetup2"); if(t) t.onclick=function(e){e.preventDefault();openSetup();}; return; }
+    var st=standings(), done=seriesDone();
+    var target = s.format==="matches" ? s.n+" matcher" : ("Först till "+s.target+" p");
+    var html='<div class="card"><h3>🏆 Serie · '+esc(target)+'</h3>';
+    html+='<div class="muted-note" style="text-align:left;padding:0 0 8px">'+st.games+' spelade'+(s.format==="matches"?(' av '+s.n):'')+' · rankas efter '+(s.format==="matches"&&s.rankBy==="wins"?"vunna matcher":"totalpoäng")+'</div>';
+    st.arr.forEach(function(r,i){ var pos=i+1; var big = (s.format==="matches"&&s.rankBy==="wins") ? (Math.round(r.wins*10)/10+" v") : (r.points+" p");
+      var subv = (s.format==="matches"&&s.rankBy==="wins") ? (r.points+" p") : (Math.round(r.wins*10)/10+" vinster");
+      var prog=""; if(s.format==="race"){ prog='<div class="progress"><div style="width:'+Math.min(100,Math.round(r.points/s.target*100))+'%"></div></div>'; }
+      html+='<div class="rank"><span class="pos'+(pos<=3?" g"+pos:"")+'">'+pos+'</span><span class="rn">'+esc(r.name)+'<small>'+r.played+' spel · bästa '+r.best+'</small>'+prog+'</span><span class="rv">'+big+'<small>'+subv+'</small></span></div>'; });
+    html+='</div>';
+    if(done && st.arr.length){ var champ=st.arr[0]; html='<div class="winner show" style="margin:0 0 12px"><span class="trophy">👑</span><span class="wtxt">'+esc(champ.name)+' vinner serien!<small>'+((s.format==="matches"&&s.rankBy==="wins")?(Math.round(champ.wins*10)/10+" vunna matcher"):(champ.points+" poäng"))+'</small></span></div>'+html+'<div class="card"><button class="btn primary full" id="newSeriesBtn">🆕 Ny serie</button></div>'; }
+    host.innerHTML=html;
+    var nb=$("newSeriesBtn"); if(nb) nb.onclick=function(){ if(confirm("Starta en ny serie? Nuvarande serieresultat nollställs.")) newSeries(); };
   }
 
-  // ---------------------------------------------------------------- Sheet UI
-  var backdrop = $("backdrop"), sheet = $("sheet");
-  function openSheet(html) { sheet.innerHTML = '<div class="grabber"></div>' + html; backdrop.classList.add("open"); }
-  function closeSheet() { backdrop.classList.remove("open"); sheet.innerHTML = ""; }
-  backdrop.addEventListener("click", function (e) { if (e.target === backdrop) closeSheet(); });
+  function renderStats(){
+    var host=$("statsHost"), pl=playerList();
+    if(!pl.length){ host.innerHTML='<div class="muted-note">Inga spelare än. Lägg till spelare och spela ett par matcher så byggs statistiken upp här.</div>'; return; }
+    var any=state.history.some(function(g){return g.variant===state.cfg.variant;});
+    var html='';
+    if(!any) html+='<div class="muted-note">Spela klart minst en match ('+esc(V().name)+') så visas statistik per spelare här. 📈</div>';
+    pl.forEach(function(id){ var s=statsFor(id); if(!s) return;
+      html+='<div class="card"><h3>'+esc(state.players[id].name)+(id===mePid?' <span style="color:var(--brand);font-size:12px">(du)</span>':'')+'</h3><div class="statgrid">'+
+        stat("Matcher",s.games)+stat("Vinster",s.wins+" <small>("+s.winPct+"%)</small>")+
+        stat("Snittpoäng",s.avg)+stat("Bästa spel",s.best)+
+        stat("Bonus",s.bonusPct+"%")+stat("Snitt övre",s.avgUpper)+
+        stat("Yatzy totalt",s.yatzys)+stat("Längsta svit",s.streak+" 🔥")+
+        '</div></div>'; });
+    if(any && !html) html='<div class="muted-note">Ingen statistik för '+esc(V().name)+' än.</div>';
+    host.innerHTML=html + '<div class="muted-note">Statistiken gäller varianten <b>'+esc(V().name)+'</b> och sparas per rum.</div>';
+  }
+  function stat(k,v){ return '<div class="stat"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
 
-  function openScoreSheet(pid, catKey) {
-    var cat = CAT_BY_KEY[catKey];
-    var cur = cellVal(pid, catKey);
-    var body = '<h3>' + esc(cat.label) + '</h3><p class="sub">' + esc(state.players[pid].name) + ' &middot; ' + esc(cat.hint) + '</p>';
-
-    if (cat.kind === "fixed") {
-      body += '<div class="chips">' +
-        '<button class="chip big' + (cur === cat.val ? " cur" : "") + '" data-v="' + cat.val + '">' + cat.val + ' p</button>' +
-        '<button class="chip strike big' + (cur === 0 ? " cur" : "") + '" data-v="0">Stryk (0)</button></div>';
-    } else if (cat.kind === "mult" || cat.kind === "list") {
-      var vals;
-      if (cat.kind === "mult") { vals = []; for (var i = 0; i <= cat.count; i++) vals.push(i * cat.mult); }
-      else vals = cat.values.slice();
-      body += '<div class="chips">';
-      vals.forEach(function (v) {
-        var c = "chip" + (v === 0 ? " zero" : "") + (cur === v ? " cur" : "");
-        body += '<button class="' + c + '" data-v="' + v + '">' + (v === 0 ? "Stryk" : v) + '</button>';
-      });
-      body += '</div>';
-    } else { // free -> keypad
-      body += '<div class="kdisplay" id="kdisp">' + (cur != null ? cur : "0") + '</div><div class="keypad">';
-      ["1","2","3","4","5","6","7","8","9"].forEach(function (n) { body += '<button class="chip" data-k="' + n + '">' + n + '</button>'; });
-      body += '<button class="chip strike" data-k="clr">C</button><button class="chip" data-k="0">0</button><button class="chip zero" data-k="del">⌫</button></div>';
-      body += '<div class="row2"><button class="btn sec" data-v="0">Stryk (0)</button><button class="btn primary" id="kok">Klar</button></div>';
+  function renderBottom(){
+    var host=$("bottomHost"), pl=playerList();
+    if(tab!=="play" || pl.length===0){
+      if(pl.length===0){ host.innerHTML=""; return; }
+      host.innerHTML='<div class="actionbar"><button class="ghost" id="addPlayerFab">＋ Spelare</button><button class="primary" id="shareFab">📤 Bjud in spelare</button></div>';
+      wireBottom(); return;
     }
-    if (cur != null) body += '<div class="row2"><button class="btn danger full" id="clearBtn">Rensa rutan</button></div>';
-    body += '<div class="hint">Fyll i poängen kategorin ger. Tryck <b>Stryk</b> om du inte fick något (0 p).</div>';
+    if(state.cfg.mode!=="digital"){
+      host.innerHTML='<div class="actionbar"><button class="ghost" id="addPlayerFab">＋ Spelare</button><button class="primary" id="shareFab">📤 Bjud in spelare</button></div>';
+      wireBottom(); return;
+    }
+    // digital tray
+    var v=V(), live=state.game.live, n=v.dice;
+    if(gameComplete()){ host.innerHTML='<div class="actionbar"><button class="ghost" id="addPlayerFab">＋ Spelare</button><button class="primary" id="nextMatchFab">▶ '+(seriesDone()?"Se resultat":"Nästa match")+'</button></div>'; wireBottom(); return; }
+    var turnName = live.turnPid?state.players[live.turnPid].name:"";
+    var diceHtml=""; for(var i=0;i<n;i++){ var held=live.held[i]; var blank=(live.rollNo<1||live.values.length!==n); diceHtml+='<div class="die'+(blank?" blank":"")+(held&&!blank?" held":"")+'" data-die="'+i+'">'+pipSpans()+'</div>'; }
+    var rollLabel = live.rollNo>=3?"Skriv in poäng ovan":(live.rollNo===0?"🎲 Kasta tärningar":"🎲 Kasta igen ("+(3-live.rollNo)+" kvar)");
+    host.innerHTML='<div class="tray"><div class="tturn">'+(live.turnPid?("<b>"+esc(turnName)+"</b>s tur · kast "+live.rollNo+"/3"):"")+'</div>'+
+      '<div class="dicerow" id="dicerow">'+diceHtml+'</div>'+
+      '<div class="tactions"><button class="roll" id="rollBtn"'+(live.rollNo>=3?" disabled":"")+'>'+rollLabel+'</button></div>'+
+      '<div class="hint2">'+(live.rollNo<1?"Kasta, lås tärningar du vill behålla, kasta om (max 3). Tryck sedan en kategori.":"Lås tärningar genom att trycka på dem. Tryck en grön ruta för att skriva in.")+'</div></div>';
+    // set pips to current values
+    var els=host.querySelectorAll(".die"); for(var k=0;k<n;k++){ if(live.rollNo>=1&&live.values.length===n){ setPips(els[k],live.values[k]); els[k].classList.toggle("held",!!live.held[k]); els[k].classList.remove("blank"); } }
+    $("rollBtn").onclick=rollDice;
+    host.querySelectorAll(".die").forEach(function(el){ el.onclick=function(){ toggleHold(parseInt(el.getAttribute("data-die"),10)); }; });
+  }
+  function pipSpans(){ var s=""; for(var i=0;i<9;i++) s+='<span class="pip"></span>'; return s; }
+  function wireBottom(){ var a=$("addPlayerFab"); if(a) a.onclick=openAddPlayer; var s=$("shareFab"); if(s) s.onclick=doShare;
+    var nm=$("nextMatchFab"); if(nm) nm.onclick=function(){ if(seriesDone()){ tab="standings"; renderAll(); } else { toast("Spel "+state.game.no+" – kör!"); renderAll(); } }; }
 
+  // ============================================================ SHEETS
+  var backdrop=$("backdrop"), sheet=$("sheet");
+  function openSheet(html){ sheet.innerHTML='<div class="grabber"></div>'+html; backdrop.classList.add("open"); }
+  function closeSheet(){ backdrop.classList.remove("open"); sheet.innerHTML=""; }
+  backdrop.addEventListener("click",function(e){ if(e.target===backdrop) closeSheet(); });
+
+  // manual score entry (manual mode)
+  function openScoreSheet(pid,catKey){
+    var cat=V().map[catKey], cur=cellVal(pid,catKey);
+    var body='<h3>'+esc(cat.sv)+'</h3><p class="sub">'+esc(state.players[pid].name)+' &middot; '+esc(cat.hint||"")+'</p>';
+    if(cat.fixed!=null){
+      body+='<div class="chips"><button class="chip big'+(cur===cat.fixed?" cur":"")+'" data-v="'+cat.fixed+'">'+cat.fixed+' p</button><button class="chip strike big'+(cur===0?" cur":"")+'" data-v="0">Stryk (0)</button></div>';
+    } else {
+      body+='<div class="kdisplay" id="kdisp">'+(cur!=null?cur:"0")+'</div><div class="keypad">';
+      ["1","2","3","4","5","6","7","8","9"].forEach(function(nn){ body+='<button class="chip" data-k="'+nn+'">'+nn+'</button>'; });
+      body+='<button class="chip strike" data-k="clr">C</button><button class="chip" data-k="0">0</button><button class="chip zero" data-k="del">⌫</button></div>';
+      body+='<div class="row2"><button class="btn sec" data-v="0">Stryk (0)</button><button class="btn primary" id="kok">Klar</button></div>';
+    }
+    if(cur!=null) body+='<div class="row2"><button class="btn danger full" id="clearBtn">Rensa rutan</button></div>';
     openSheet(body);
-
-    Array.prototype.forEach.call(sheet.querySelectorAll("[data-v]"), function (btn) {
-      btn.addEventListener("click", function () { setScore(pid, catKey, parseInt(btn.getAttribute("data-v"), 10)); closeSheet(); });
-    });
-    var clearBtn = $("clearBtn");
-    if (clearBtn) clearBtn.addEventListener("click", function () { clearScore(pid, catKey); closeSheet(); });
-
-    if (cat.kind === "free") {
-      var buf = (cur != null ? String(cur) : "");
-      var disp = $("kdisp");
-      var refresh = function () { disp.textContent = buf === "" ? "0" : buf; };
-      Array.prototype.forEach.call(sheet.querySelectorAll("[data-k]"), function (btn) {
-        btn.addEventListener("click", function () {
-          var k = btn.getAttribute("data-k");
-          if (k === "clr") buf = "";
-          else if (k === "del") buf = buf.slice(0, -1);
-          else { if (buf.length < 3) buf += k; }
-          buf = buf.replace(/^0+(?=\d)/, "");
-          if (buf !== "" && parseInt(buf, 10) > cat.max) buf = String(cat.max);
-          refresh();
-        });
-      });
-      $("kok").addEventListener("click", function () {
-        var v = buf === "" ? 0 : Math.min(cat.max, parseInt(buf, 10) || 0);
-        setScore(pid, catKey, v); closeSheet();
-      });
+    Array.prototype.forEach.call(sheet.querySelectorAll("[data-v]"),function(b){ b.onclick=function(){ setScore(pid,catKey,parseInt(b.getAttribute("data-v"),10)); closeSheet(); }; });
+    var cb=$("clearBtn"); if(cb) cb.onclick=function(){ clearScore(pid,catKey); closeSheet(); };
+    if(cat.fixed==null){ var buf=(cur!=null?String(cur):""), disp=$("kdisp"), max=cat.max||60;
+      function rf(){ disp.textContent=buf===""?"0":buf; }
+      Array.prototype.forEach.call(sheet.querySelectorAll("[data-k]"),function(b){ b.onclick=function(){ var k=b.getAttribute("data-k");
+        if(k==="clr") buf=""; else if(k==="del") buf=buf.slice(0,-1); else { if(buf.length<3) buf+=k; } buf=buf.replace(/^0+(?=\d)/,""); if(buf!==""&&parseInt(buf,10)>max) buf=String(max); rf(); }; });
+      $("kok").onclick=function(){ var vv=buf===""?0:Math.min(max,parseInt(buf,10)||0); setScore(pid,catKey,vv); closeSheet(); };
     }
   }
 
-  function openPlayerSheet(pid) {
-    var p = state.players[pid];
-    openSheet('<h3>' + esc(p.name) + '</h3><p class="sub">Spelare</p>' +
-      '<label class="sub" style="display:block;margin-bottom:2px">Namn</label>' +
-      '<input class="field" id="pnameInput" value="' + esc(p.name) + '" maxlength="16" />' +
-      '<div class="row2"><button class="btn sec" id="pRename">Spara namn</button>' +
-      '<button class="btn danger" id="pRemove">Ta bort</button></div>');
-    var input = $("pnameInput");
-    $("pRename").addEventListener("click", function () { renamePlayer(pid, input.value); closeSheet(); });
-    $("pRemove").addEventListener("click", function () {
-      if (confirm("Ta bort " + p.name + " och deras poäng?")) { removePlayer(pid); closeSheet(); }
-    });
+  function openPlayerSheet(pid){
+    var p=state.players[pid];
+    var isMe=(pid===mePid);
+    openSheet('<h3>'+esc(p.name)+'</h3><p class="sub">Spelare</p>'+
+      '<label class="sub" style="display:block;margin-bottom:2px">Namn</label>'+
+      '<input class="field" id="pnameInput" value="'+esc(p.name)+'" maxlength="16" />'+
+      '<div class="row2"><button class="btn primary" id="pRename">Spara namn</button><button class="btn sec" id="pMe">'+(isMe?"✓ Det här är jag":"Det här är jag")+'</button></div>'+
+      '<div class="row2"><button class="btn danger full" id="pRemove">Ta bort spelare</button></div>');
+    var input=$("pnameInput");
+    $("pRename").onclick=function(){ renamePlayer(pid,input.value); closeSheet(); };
+    $("pMe").onclick=function(){ if(mePid===pid){ mePid=null; localStorage.removeItem(meKey); } else { mePid=pid; localStorage.setItem(meKey,pid); } closeSheet(); renderAll(); };
+    $("pRemove").onclick=function(){ if(confirm("Ta bort "+p.name+" och deras poäng?")){ if(mePid===pid){mePid=null;localStorage.removeItem(meKey);} removePlayer(pid); closeSheet(); } };
   }
 
-  function openAddPlayerSheet() {
-    openSheet('<h3>Ny spelare</h3><p class="sub">Lägg till en spelare på tavlan</p>' +
-      '<input class="field" id="newName" placeholder="Namn" maxlength="16" autocomplete="off" />' +
-      '<div class="row2"><button class="btn sec" id="addCancel">Avbryt</button>' +
-      '<button class="btn primary" id="addOk">Lägg till</button></div>');
-    var input = $("newName");
-    setTimeout(function () { try { input.focus(); } catch (e) {} }, 60);
-    var go = function () { addPlayer(input.value); closeSheet(); };
-    $("addOk").addEventListener("click", go);
-    $("addCancel").addEventListener("click", closeSheet);
-    input.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
+  function openAddPlayer(){
+    var names=[];
+    function redraw(){
+      var tags=names.map(function(nm,i){ return '<span class="ptag">'+esc(nm)+'<button data-rm="'+i+'">×</button></span>'; }).join("");
+      openSheet('<h3>Spelare</h3><p class="sub">Lägg till alla som är med</p>'+
+        (playerList().length?'<div class="muted-note" style="text-align:left;padding:0 0 6px">Redan med: '+playerList().map(function(id){return esc(state.players[id].name);}).join(", ")+'</div>':'')+
+        '<div class="plist">'+tags+'</div>'+
+        '<input class="field" id="newName" placeholder="Skriv namn och tryck +" maxlength="16" autocomplete="off" />'+
+        '<div class="row2"><button class="btn sec" id="addMore">＋ Lägg till namn</button><button class="btn primary" id="addDone">Klar</button></div>'+
+        '<div class="hint">Tips: du kan lägga till fler spelare när som helst.</div>');
+      var input=$("newName"); setTimeout(function(){ try{input.focus();}catch(e){} },50);
+      function push(){ var v=input.value.trim(); if(v){ names.push(v); } redraw(); }
+      $("addMore").onclick=push;
+      input.onkeydown=function(e){ if(e.key==="Enter"){ e.preventDefault(); push(); } };
+      $("addDone").onclick=function(){ var v=input.value.trim(); if(v) names.push(v); names.forEach(function(nm){ addPlayer(nm); }); closeSheet(); if(names.length) toast(names.length+" spelare tillagda"); };
+      Array.prototype.forEach.call(sheet.querySelectorAll("[data-rm]"),function(b){ b.onclick=function(){ names.splice(parseInt(b.getAttribute("data-rm"),10),1); redraw(); }; });
+    }
+    redraw();
   }
 
-  function openMenuSheet() {
-    openSheet('<h3>Meny</h3><p class="sub">Rum ' + room + '</p>' +
-      '<div class="menu-list">' +
-      '<button id="mShare"><span class="em">📤</span> Bjud in spelare (dela länk)</button>' +
-      '<button id="mAdd"><span class="em">＋</span> Lägg till spelare</button>' +
-      '<button id="mNew"><span class="em">🆕</span> Skapa nytt rum</button>' +
-      '<button id="mReset" class="warn"><span class="em">♻️</span> Nollställ poäng (samma rum)</button></div>' +
-      '<div class="hint">Alla med länken ser samma tavla i realtid och kan fylla i poäng. Rummet är öppet för alla som har koden.</div>');
-    $("mShare").addEventListener("click", function () { closeSheet(); doShare(); });
-    $("mAdd").addEventListener("click", function () { closeSheet(); openAddPlayerSheet(); });
-    $("mNew").addEventListener("click", function () {
-      if (confirm("Skapa ett nytt tomt rum? Nuvarande tavla finns kvar på sin länk.")) { location.hash = "#" + rid(4); location.reload(); }
-    });
-    $("mReset").addEventListener("click", function () {
-      if (confirm("Nollställ alla poäng i rummet? Spelarna blir kvar.")) { resetGame(); closeSheet(); toast("Poängen nollställda"); }
-    });
+  function openSetup(){
+    var c=JSON.parse(JSON.stringify(state.cfg));
+    function draw(){
+      var vHtml=Object.keys(VARIANTS).map(function(id){ var V2=VARIANTS[id]; var on=c.variant===id;
+        var desc=id==="yatzy"?"5 tärningar · 15 rutor · klassisk svensk":id==="maxi"?"6 tärningar · 20 rutor · bonus vid 84":"5 tärningar · 13 rutor · joker & bonus";
+        return '<div class="opt'+(on?" on":"")+'" data-variant="'+id+'"><div class="oi">'+(id==="maxi"?"🎲":id==="yahtzee"?"🇺🇸":"🇸🇪")+'</div><div><div class="ot">'+esc(V2.name)+'</div><div class="od">'+desc+'</div></div></div>'; }).join("");
+      var modeHtml='<div class="seg"><button data-mode="digital" class="'+(c.mode==="digital"?"on":"")+'">🎲 Digitala tärningar</button><button data-mode="manual" class="'+(c.mode==="manual"?"on":"")+'">✍️ Egna tärningar</button></div>';
+      var sf=c.series.format;
+      var serHtml='<div class="seg"><button data-fmt="single" class="'+(sf==="single"?"on":"")+'">Enkel</button><button data-fmt="matches" class="'+(sf==="matches"?"on":"")+'">Matcher</button><button data-fmt="race" class="'+(sf==="race"?"on":"")+'">Först till X</button></div>';
+      var extra="";
+      if(sf==="matches") extra='<div class="inline"><label>Antal matcher:</label><input class="field" id="nInput" style="width:90px;margin:0" type="number" min="2" max="50" value="'+c.series.n+'"/></div>'+
+        '<div class="seg" style="margin-top:8px"><button data-rank="points" class="'+(c.series.rankBy==="points"?"on":"")+'">Mest poäng</button><button data-rank="wins" class="'+(c.series.rankBy==="wins"?"on":"")+'">Flest vunna</button></div>';
+      if(sf==="race") extra='<div class="inline"><label>Målpoäng:</label><input class="field" id="tInput" style="width:120px;margin:0" type="number" min="100" max="10000" step="50" value="'+c.series.target+'"/></div>';
+      openSheet('<h3>Inställningar</h3><p class="sub">Ändra när som helst – gäller för alla i rummet</p>'+
+        '<div class="sub" style="font-weight:800;color:var(--ink)">Variant</div><div class="opts">'+vHtml+'</div>'+
+        '<div class="sub" style="font-weight:800;color:var(--ink);margin-top:6px">Tärningar</div>'+modeHtml+
+        '<div class="sub" style="font-weight:800;color:var(--ink);margin-top:6px">Spelform</div>'+serHtml+extra+
+        '<div class="row2"><button class="btn sec" id="setCancel">Avbryt</button><button class="btn primary" id="setSave">Spara</button></div>'+
+        '<div class="hint">Byter du variant mitt i ett spel nollställs den pågående matchen. Statistik sparas per variant.</div>');
+      Array.prototype.forEach.call(sheet.querySelectorAll("[data-variant]"),function(b){ b.onclick=function(){ c.variant=b.getAttribute("data-variant"); draw(); }; });
+      Array.prototype.forEach.call(sheet.querySelectorAll("[data-mode]"),function(b){ b.onclick=function(){ c.mode=b.getAttribute("data-mode"); draw(); }; });
+      Array.prototype.forEach.call(sheet.querySelectorAll("[data-fmt]"),function(b){ b.onclick=function(){ c.series.format=b.getAttribute("data-fmt"); draw(); }; });
+      Array.prototype.forEach.call(sheet.querySelectorAll("[data-rank]"),function(b){ b.onclick=function(){ c.series.rankBy=b.getAttribute("data-rank"); draw(); }; });
+      var ni=$("nInput"); if(ni) ni.onchange=function(){ c.series.n=Math.max(2,Math.min(50,parseInt(ni.value,10)||3)); };
+      var ti=$("tInput"); if(ti) ti.onchange=function(){ c.series.target=Math.max(100,parseInt(ti.value,10)||1000); };
+      $("setCancel").onclick=closeSheet;
+      $("setSave").onclick=function(){
+        var ni2=$("nInput"); if(ni2) c.series.n=Math.max(2,Math.min(50,parseInt(ni2.value,10)||3));
+        var ti2=$("tInput"); if(ti2) c.series.target=Math.max(100,parseInt(ti2.value,10)||1000);
+        var variantChanged=(c.variant!==state.cfg.variant);
+        setConfig({variant:c.variant,mode:c.mode,series:c.series});
+        if(variantChanged) emit({t:"resetgame"}); // fresh board for the new variant (history kept per variant)
+        closeSheet(); toast("Inställningar sparade");
+      };
+    }
+    draw();
   }
 
-  // ---------------------------------------------------------------- Share
-  function doShare() {
-    var url = location.href;
-    if (navigator.share) { navigator.share({ title: "Yatzy scoreboard", text: "Häng med i Yatzy – rum " + room, url: url }).catch(function () {}); }
-    else if (navigator.clipboard) { navigator.clipboard.writeText(url).then(function () { toast("Länk kopierad ✓"); }, function () { prompt("Kopiera länken:", url); }); }
-    else { prompt("Kopiera länken:", url); }
+  function showWinnerSheet(r){
+    // brief celebratory sheet
+    var names=r.winner.map(function(id){return state.players[id]?state.players[id].name:"?";}).join(" & ");
+    var rows=r.order.map(function(pid,i){ var res=r.results[pid]; return '<div class="rank"><span class="pos'+(i<3?" g"+(i+1):"")+'">'+(i+1)+'</span><span class="rn">'+esc(state.players[pid]?state.players[pid].name:"?")+'</span><span class="rv">'+res.total+'<small>p</small></span></div>'; }).join("");
+    var seriesInfo="";
+    if(state.cfg.series.format!=="single"){ seriesInfo = seriesDone()?'<div class="hint">🎉 Serien är avgjord! Se fliken Ställning.</div>':'<div class="hint">Match '+state.history.length+' klar. Nästa match väntar – tryck ▶ nere.</div>'; }
+    openSheet('<h3>🏆 '+esc(names)+' vann!</h3><p class="sub">Spel '+state.history.length+' · '+esc(V().name)+'</p><div class="card" style="box-shadow:none;margin:0">'+rows+'</div>'+seriesInfo+
+      '<div class="row2"><button class="btn sec" id="wClose">Stäng</button><button class="btn primary" id="wNext">'+(seriesDone()?"Se ställning":(state.cfg.series.format!=="single"?"Nästa match":"Ny match"))+'</button></div>');
+    $("wClose").onclick=closeSheet;
+    $("wNext").onclick=function(){ closeSheet(); if(seriesDone()){ tab="standings"; } renderAll(); };
   }
 
-  // ---------------------------------------------------------------- Events
-  document.addEventListener("click", function (e) {
-    if (!e.target.closest) return;
-    var cell = e.target.closest("td.cell[data-cat]");
-    if (cell) { openScoreSheet(cell.getAttribute("data-player"), cell.getAttribute("data-cat")); return; }
-    var ph = e.target.closest("th.player[data-player]");
-    if (ph) { openPlayerSheet(ph.getAttribute("data-player")); return; }
-    if (e.target.closest("#addColBtn")) { openAddPlayerSheet(); return; }
+  function openMenu(){
+    openSheet('<h3>Meny</h3><p class="sub">Rum '+room+' · '+esc(V().name)+'</p><div class="menu-list">'+
+      '<button id="mShare"><span class="em">📤</span> Bjud in spelare (dela länk)</button>'+
+      '<button id="mAdd"><span class="em">＋</span> Lägg till spelare</button>'+
+      '<button id="mSetup"><span class="em">⚙️</span> Inställningar (variant, serie, tärningar)</button>'+
+      '<button id="mReset" class="warn"><span class="em">♻️</span> Nollställ pågående match</button>'+
+      '<button id="mNew"><span class="em">🆕</span> Skapa nytt rum</button></div>'+
+      '<div class="hint">Alla med länken ser samma tavla i realtid och kan spela. Rummet är öppet för alla som har koden.</div>');
+    $("mShare").onclick=function(){ closeSheet(); doShare(); };
+    $("mAdd").onclick=function(){ closeSheet(); openAddPlayer(); };
+    $("mSetup").onclick=function(){ closeSheet(); openSetup(); };
+    $("mReset").onclick=function(){ if(confirm("Nollställ den pågående matchen? Serie & statistik påverkas inte.")){ resetCurrentGame(); closeSheet(); toast("Matchen nollställd"); } };
+    $("mNew").onclick=function(){ if(confirm("Skapa ett nytt tomt rum?")){ location.hash="#"+rid(4); location.reload(); } };
+  }
+  function resetCurrentGame(){ emit({t:"resetgame"}); }
+
+  function doShare(){ var url=location.href;
+    if(navigator.share){ navigator.share({title:"Yatzy scoreboard",text:"Häng med i Yatzy – rum "+room,url:url}).catch(function(){}); }
+    else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(function(){toast("Länk kopierad ✓");},function(){prompt("Kopiera länken:",url);}); }
+    else prompt("Kopiera länken:",url); }
+
+  // ============================================================ EVENTS
+  document.addEventListener("click",function(e){
+    if(!e.target.closest) return;
+    var commitCell=e.target.closest('td.cell[data-commit]');
+    if(commitCell){ var pid=commitCell.getAttribute("data-player"), cat=commitCell.getAttribute("data-cat");
+      var pv=scoreCat(state.cfg.variant,cat,state.game.live.values.slice(0,V().dice),filledMap(pid));
+      if(pv===0){ if(confirm("Detta ger 0 poäng (stryk "+V().map[cat].sv+"). Bekräfta?")) commit(pid,cat); }
+      else commit(pid,cat);
+      return; }
+    var manualCell=e.target.closest('td.cell.tap[data-cat]:not([data-commit])');
+    if(manualCell && state.cfg.mode==="manual"){ openScoreSheet(manualCell.getAttribute("data-player"),manualCell.getAttribute("data-cat")); return; }
+    var ph=e.target.closest("th.player[data-player]");
+    if(ph){ openPlayerSheet(ph.getAttribute("data-player")); return; }
+    if(e.target.closest("#addColBtn")){ openAddPlayer(); return; }
+    if(e.target.closest("#welcomeAdd")){ openAddPlayer(); return; }
+    if(e.target.closest("#welcomeSetup")){ e.preventDefault(); openSetup(); return; }
   });
-  $("shareBtn").addEventListener("click", doShare);
-  $("shareFab").addEventListener("click", doShare);
-  $("roomChip").addEventListener("click", doShare);
-  $("menuBtn").addEventListener("click", openMenuSheet);
-  $("addPlayerFab").addEventListener("click", openAddPlayerSheet);
-  window.addEventListener("hashchange", function () { var r = currentRoom(); if (r && r !== room) location.reload(); });
-  window.addEventListener("online", function () { setStatus("connecting"); connect(); });
-  window.addEventListener("offline", function () { setStatus("off"); });
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(b){ b.onclick=function(){ tab=b.getAttribute("data-tab"); renderAll(); }; });
+  $("shareBtn").onclick=doShare; $("roomChip").onclick=doShare; $("menuBtn").onclick=openMenu;
+  window.addEventListener("hashchange",function(){ var r=currentRoom(); if(r&&r!==room) location.reload(); });
+  window.addEventListener("online",function(){ setStatus("connecting"); connect(); });
+  window.addEventListener("offline",function(){ setStatus("off"); });
 
-  // ---------------------------------------------------------------- Boot
+  // ============================================================ BOOT
   loadLocal();
-  render();
-  setStatus(navigator.onLine ? "connecting" : "off");
-  if (navigator.onLine) connect();
+  if(state.cfg.mode==="digital" && !state.game.live.turnPid) state.game.live.turnPid=playerList()[0]||null;
+  renderAll();
+  setStatus(navigator.onLine?"connecting":"off");
+  if(navigator.onLine) connect();
 })();
 </script>
 </body>
