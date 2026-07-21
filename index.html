@@ -953,7 +953,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       g.strokeStyle="#ffffff"; g.lineWidth=9; g.beginPath(); g.arc(48,44,15,Math.PI,0); g.stroke();                 // shackle
       g.fillStyle="#ffffff"; g.fillRect(30,44,36,30); g.fillStyle="#0f766e"; g.beginPath(); g.arc(48,58,4,0,6.2832); g.fill(); g.fillRect(46,58,4,10); // body + keyhole
       _lockTex=new TH.CanvasTexture(c); _lockTex.needsUpdate=true; return _lockTex; }
-    function makeLock(){ var s=new TH.Sprite(new TH.SpriteMaterial({map:lockTex(),depthTest:false,depthWrite:false,transparent:true})); s.scale.set(0.7,0.7,0.7); s.position.set(0,0.95,0); s.visible=false; s.renderOrder=999; return s; }
+    function makeLock(){ var s=new TH.Sprite(new TH.SpriteMaterial({map:lockTex(),depthTest:false,depthWrite:false,transparent:true})); s.scale.set(0.5,0.5,0.5); s.position.set(0,1.45,0); s.visible=false; s.renderOrder=999; return s; }
     function makeDie(){
       var geo = TH.RoundedBoxGeometry?new TH.RoundedBoxGeometry(DS,DS,DS,5,0.13):new TH.BoxGeometry(DS,DS,DS);
       var mat = TH.MeshPhysicalMaterial ? new TH.MeshPhysicalMaterial({color:BASE_COL, roughness:0.42, metalness:0.0, clearcoat:0.45, clearcoatRoughness:0.28, envMapIntensity:0.35})
@@ -1010,7 +1010,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       N=n; for(var i=0;i<dice.length;i++){ var vis=(i<n); dice[i].mesh.visible=vis; if(!vis) dice[i].lock.visible=false; } }
     function slotX(i,n){ var step=Math.min(1.9,(FX*2-1.4)/Math.max(1,n)); return (i-(n-1)/2)*step; }
     function setDynamic(b,dyn){ b.type=dyn?CN.Body.DYNAMIC:CN.Body.STATIC; b.mass=dyn?1:0; b.updateMassProperties(); if(dyn) b.wakeUp(); }
-    function lockPos(d){ if(d.lock) d.lock.position.set(d.body.position.x,d.body.position.y+0.92,d.body.position.z); }
+    function lockPos(d){ if(d.lock) d.lock.position.set(d.body.position.x,d.body.position.y+1.45,d.body.position.z+0.15); }
     function applyHeld(d){ var m=d.mesh.material;
       if(d.held){ if(m.color) m.color.setHex(0xf2a52c); if(m.emissive){ m.emissive.setHex(0xd07a00); m.emissiveIntensity=0.6; } if(d.lock){ d.lock.visible=true; lockPos(d); } } // warm gold, clearly different from the white dice
       else { if(m.color) m.color.setHex(BASE_COL); if(m.emissive){ m.emissive.setHex(0x000000); m.emissiveIntensity=0; } if(d.lock) d.lock.visible=false; } }
