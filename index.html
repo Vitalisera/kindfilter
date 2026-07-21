@@ -635,6 +635,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   function sfxYatzy(){ [523,659,784,1047,1319].forEach(function(f,i){ beep(f,0.2,"triangle",0.16,i*0.09); }); }
   function sfxBonus(){ [784,988,1319,1568].forEach(function(f,i){ beep(f,0.16,"square",0.09,i*0.08); }); }
   function toggleSound(){ soundOn=!soundOn; localStorage.setItem("yz_sound",soundOn?"1":"0"); if(soundOn){ ensureAudio(); sfxCommit(); } toast(soundOn?"Ljud på 🔊":"Ljud av 🔇"); }
+  var hapticsOn = localStorage.getItem("yz_haptics")!=="0";
+  function vibrate(ms){ if(!hapticsOn) return; try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
+  function toggleHaptics(){ hapticsOn=!hapticsOn; localStorage.setItem("yz_haptics",hapticsOn?"1":"0"); if(hapticsOn) vibrate([20,40,20]); toast(hapticsOn?"Vibration på 📳":"Vibration av"); }
 
   // ============================================================ IDENTITY + ROOM
   var clientId = localStorage.getItem("yz_cid");
@@ -884,7 +887,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var TH=window.THREE, CN=window.CANNON;
     var libs=!!(TH&&CN);
     var renderer,scene,camera,world,dtMat,floorMat,rafId=null,inited=false,canvasEl=null,running=false;
-    var dice=[], N=0, animating=false, phase="idle", settleCb=null, framesLow=0, tStart=0, snapIx=[], pickCb=null, shownKey="";
+    var dice=[], N=0, animating=false, phase="idle", settleCb=null, framesLow=0, tStart=0, snapIx=[], pickCb=null, shownKey="", hapticCb=null, lastVib=0;
+    function onCollide(e){ if(phase!=="throw"||!hapticCb) return; var c=e&&e.contact; if(!c||!c.getImpactVelocityAlongNormal) return; var v=Math.abs(c.getImpactVelocityAlongNormal()); if(v<1.7) return; var t=now(); if(t-lastVib<42) return; lastVib=t; hapticCb(Math.min(45,Math.round(7+v*2.4))); }
     var FX=6.4, FZ=2.3, DS=1.0;
     var LN={1:[1,0,0],6:[-1,0,0],2:[0,1,0],5:[0,-1,0],3:[0,0,1],4:[0,0,-1]};
     function now(){ return (window.performance&&performance.now)?performance.now():(+new Date()); }
@@ -932,6 +936,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     }
     function ensureDice(n){ while(dice.length<n){ var m=makeDie(); scene.add(m);
         var body=new CN.Body({mass:1,material:dtMat,allowSleep:true}); body.addShape(new CN.Box(new CN.Vec3(0.5,0.5,0.5))); body.sleepSpeedLimit=0.5; body.sleepTimeLimit=0.35; body.linearDamping=0.06; body.angularDamping=0.06; world.addBody(body);
+        body.addEventListener("collide",onCollide);
         dice.push({mesh:m,body:body,held:false,value:1,snapTo:null,snapFrom:null,snapT:0}); }
       N=n; for(var i=0;i<dice.length;i++) dice[i].mesh.visible=(i<n); }
     function slotX(i,n){ var step=Math.min(1.7,(FX*2-1.2)/Math.max(1,n)); return (i-(n-1)/2)*step; }
@@ -989,7 +994,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function dieIndex(o){ while(o){ for(var i=0;i<dice.length;i++) if(dice[i].mesh===o) return i; o=o.parent; } return -1; }
     function setHeld(held){ for(var i=0;i<N;i++){ dice[i].held=!!(held&&held[i]); applyHeld(dice[i]); } }
     return { supported:supported, init:init, showStatic:showStatic, clearDice:clearDice, throwDice:throwDice, reflect:reflect, resize:resize, resume:resume, pause:pause,
-      setHeld:setHeld, onPick:function(cb){ pickCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
+      setHeld:setHeld, onPick:function(cb){ pickCb=cb; }, onHaptic:function(cb){ hapticCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
       _topFace:function(i){ return dice[i]?topFace(dice[i].mesh):0; } };
   })();
   window.__DICE3D=Dice3D;
@@ -1132,7 +1137,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       if(mag>15 && t-shakeCooldown>900){ shakeCooldown=t; var live=state.game.live;
         if(state.cfg.mode==="digital" && !diceRolling && live.rollNo<3 && live.turnPid){
           var power=Math.max(0.7,Math.min(2.4,mag/16)), dir=[Math.max(-1,Math.min(1,dx/12)),1];
-          rollDice({power:power,dir:dir}); try{ if(navigator.vibrate) navigator.vibrate(30); }catch(e2){} } } }
+          rollDice({power:power,dir:dir}); vibrate(30); } } }
     lastAcc={x:a.x||0,y:a.y||0,z:a.z||0};
   }
 
@@ -1147,7 +1152,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     document.body.classList.add("d3d");
     if(host.firstChild!==tray3d){ host.innerHTML=""; host.appendChild(tray3d); }
     var canvas=tray3d.querySelector("#dice3d");
-    if(!Dice3D.inited()){ Dice3D.init(canvas); Dice3D.onPick(function(ix){ if(!diceRolling && state.game.live.rollNo>=1 && !gameComplete()) toggleHold(ix); }); }
+    if(!Dice3D.inited()){ Dice3D.init(canvas); Dice3D.onPick(function(ix){ if(!diceRolling && state.game.live.rollNo>=1 && !gameComplete()) toggleHold(ix); }); Dice3D.onHaptic(function(ms){ vibrate(ms); }); }
     Dice3D.resume(); Dice3D.resize();
     tray3d.querySelector("#t3turn").innerHTML = live.turnPid?("<b>"+esc(turnName)+"</b>s tur · kast "+live.rollNo+"/3"):"";
     var rollLabel = diceRolling?"🎲 Rullar…":(live.rollNo>=3?"Skriv in poäng ovan":(live.rollNo===0?"🎲 Kasta":"🎲 Kasta igen ("+(3-live.rollNo)+" kvar)"));
@@ -1322,6 +1327,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       '<button id="mAdd"><span class="em">＋</span> Lägg till spelare</button>'+
       '<button id="mSetup"><span class="em">⚙️</span> Inställningar (variant, serie, regler)</button>'+
       '<button id="mSound"><span class="em">'+(soundOn?"🔊":"🔇")+'</span> Ljud: '+(soundOn?"På":"Av")+'</button>'+
+      '<button id="mHaptics"><span class="em">📳</span> Vibration: '+(hapticsOn?"På":"Av")+'</button>'+
       '<button id="mReset" class="warn"><span class="em">♻️</span> Nollställ pågående match</button>'+
       '<button id="mNew"><span class="em">🆕</span> Skapa nytt rum</button></div>'+
       '<div class="hint">Alla med länken ser samma tavla i realtid och kan spela. Rummet är öppet för alla som har koden.</div>');
@@ -1329,6 +1335,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     $("mAdd").onclick=function(){ closeSheet(); openAddPlayer(); };
     $("mSetup").onclick=function(){ closeSheet(); openSetup(); };
     $("mSound").onclick=function(){ toggleSound(); closeSheet(); };
+    $("mHaptics").onclick=function(){ toggleHaptics(); closeSheet(); };
     $("mReset").onclick=function(){ if(confirm("Nollställ den pågående matchen? Serie & statistik påverkas inte.")){ resetCurrentGame(); closeSheet(); toast("Matchen nollställd"); } };
     $("mNew").onclick=function(){ if(confirm("Skapa ett nytt tomt rum?")){ location.hash="#"+rid(4); location.reload(); } };
   }
