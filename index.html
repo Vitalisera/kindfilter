@@ -632,11 +632,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   function beep(freq,dur,type,vol,when){ var a=ensureAudio(); if(!a) return; try{ var o=a.createOscillator(),gain=a.createGain(); o.type=type||"sine"; o.frequency.value=freq; var t0=a.currentTime+(when||0); gain.gain.setValueAtTime(0.0001,t0); gain.gain.exponentialRampToValueAtTime(vol||0.14,t0+0.012); gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur); o.connect(gain); gain.connect(a.destination); o.start(t0); o.stop(t0+dur+0.03); }catch(e){} }
   var _noiseBuf=null;
   function noiseBuf(a){ if(_noiseBuf) return _noiseBuf; var n=Math.floor(a.sampleRate*0.12); var buf=a.createBuffer(1,n,a.sampleRate); var ch=buf.getChannelData(0); for(var i=0;i<n;i++) ch[i]=(Math.random()*2-1); _noiseBuf=buf; return buf; }
-  function sfxBounce(vel){ var a=ensureAudio(); if(!a) return; var v=Math.max(0.12,Math.min(1,(vel||3)/8));
-    try{ var src=a.createBufferSource(); src.buffer=noiseBuf(a); var bp=a.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=1200+Math.random()*700; bp.Q.value=0.8;
-      var g=a.createGain(); var t0=a.currentTime; g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(0.16*v,t0+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.05);
-      src.connect(bp); bp.connect(g); g.connect(a.destination); src.start(t0); src.stop(t0+0.07);
-      var o=a.createOscillator(), g2=a.createGain(); o.type="sine"; o.frequency.setValueAtTime(155+Math.random()*45,t0); o.frequency.exponentialRampToValueAtTime(70,t0+0.05); g2.gain.setValueAtTime(0.12*v,t0); g2.gain.exponentialRampToValueAtTime(0.0001,t0+0.06); o.connect(g2); g2.connect(a.destination); o.start(t0); o.stop(t0+0.08);
+  function sfxBounce(vel,kind){ var a=ensureAudio(); if(!a) return; var v=Math.max(0.12,Math.min(1,(vel||3)/8)); var t0=a.currentTime; var R=Math.random();
+    // timbre depends on what was hit, with per-hit random pitch so it never sounds monotone
+    var cfg = kind==="wall" ? {f:1500+R*1500, q:1.1, dur:0.05,  amp:0.17, lo:200+R*90, lod:0.11, log:0.14 }   // wooden rim knock
+            : kind==="die"  ? {f:2600+R*1800, q:1.7, dur:0.03,  amp:0.15, lo:0,        lod:0,    log:0     }   // plastic click
+            :                 {f:620+R*520,   q:0.7, dur:0.055, amp:0.13, lo:105+R*55, lod:0.16, log:0.18 };  // felt thud (floor)
+    try{ var src=a.createBufferSource(); src.buffer=noiseBuf(a); var bp=a.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=cfg.f; bp.Q.value=cfg.q;
+      var g=a.createGain(); g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(cfg.amp*v,t0+0.003); g.gain.exponentialRampToValueAtTime(0.0001,t0+cfg.dur);
+      src.connect(bp); bp.connect(g); g.connect(a.destination); src.start(t0); src.stop(t0+cfg.dur+0.03);
+      if(cfg.lo){ var o=a.createOscillator(),g2=a.createGain(); o.type="sine"; o.frequency.setValueAtTime(cfg.lo,t0); o.frequency.exponentialRampToValueAtTime(cfg.lo*0.55,t0+cfg.lod); g2.gain.setValueAtTime(cfg.log*v,t0); g2.gain.exponentialRampToValueAtTime(0.0001,t0+cfg.lod+0.03); o.connect(g2); g2.connect(a.destination); o.start(t0); o.stop(t0+cfg.lod+0.06); }
     }catch(e){} }
   function sfxTick(){ beep(680,0.05,"sine",0.09); beep(420,0.05,"sine",0.06,0.006); }
   function sfxCommit(){ beep(520,0.09,"sine",0.11); beep(760,0.09,"sine",0.09,0.05); }
@@ -927,9 +931,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var Dice3D = (function(){
     var TH=window.THREE, CN=window.CANNON;
     var libs=!!(TH&&CN);
-    var renderer,scene,camera,world,dtMat,floorMat,rafId=null,inited=false,canvasEl=null,running=false;
-    var dice=[], N=0, animating=false, phase="idle", settleCb=null, restT=0, accum=0, lastT=0, throwStart=0, declumps=0, snapIx=[], snapInc=0.14, pickCb=null, shownKey="", impactCb=null, lastVib=0;
-    function onCollide(e){ if(phase!=="throw"||!impactCb) return; var c=e&&e.contact; if(!c||!c.getImpactVelocityAlongNormal) return; var v=Math.abs(c.getImpactVelocityAlongNormal()); if(v<1.3) return; var t=now(); if(t-lastVib<38) return; lastVib=t; impactCb(v); }
+    var renderer,scene,camera,world,dtMat,floorMat,wallMat,rafId=null,inited=false,canvasEl=null,running=false;
+    var dice=[], N=0, animating=false, phase="idle", settleCb=null, restT=0, accum=0, lastT=0, throwStart=0, declumps=0, simSteps=0, snapIx=[], snapInc=0.14, pickCb=null, shownKey="", impactCb=null, lastVib=0;
+    function onCollide(e){ if(phase!=="throw"||!impactCb) return; var c=e&&e.contact; if(!c||!c.getImpactVelocityAlongNormal) return; var v=Math.abs(c.getImpactVelocityAlongNormal()); if(v<1.3) return; var t=now(); if(t-lastVib<34) return; lastVib=t; var kind=(e.body&&e.body._env)?e.body._env:"die"; impactCb(v,kind); }
     var FX=6.4, FZ=2.3, DS=1.0;
     var LN={1:[1,0,0],6:[-1,0,0],2:[0,1,0],5:[0,-1,0],3:[0,0,1],4:[0,0,-1]};
     function now(){ return (window.performance&&performance.now)?performance.now():(+new Date()); }
@@ -938,7 +942,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function pipUV(v){ var s=0.255; var g={1:[[0,0]],2:[[-1,1],[1,-1]],3:[[-1,1],[0,0],[1,-1]],4:[[-1,-1],[-1,1],[1,-1],[1,1]],5:[[-1,-1],[-1,1],[0,0],[1,-1],[1,1]],6:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,0],[1,1]]}[v]; return g.map(function(p){return [p[0]*s,p[1]*s];}); }
     var BASE_COL=0xf3efe4, _lockTex=null, _feltTex=null;
     function feltTex(){ if(_feltTex) return _feltTex; var c=document.createElement("canvas"); c.width=c.height=256; var g=c.getContext("2d");
-      g.fillStyle="#2a6151"; g.fillRect(0,0,256,256);
+      g.fillStyle="#1f6149"; g.fillRect(0,0,256,256);
       for(var i=0;i<11000;i++){ var x=Math.random()*256,y=Math.random()*256; g.fillStyle="rgba("+(Math.random()<0.5?"0,0,0":"255,255,255")+","+(Math.random()*0.05)+")"; g.fillRect(x,y,1.6,1.6); }
       var t=new TH.CanvasTexture(c); t.wrapS=t.wrapT=TH.RepeatWrapping; t.repeat.set(7,4.5); if(TH.sRGBEncoding) t.encoding=TH.sRGBEncoding; t.anisotropy=4; t.needsUpdate=true; _feltTex=t; return t; }
     function lockTex(){ if(_lockTex) return _lockTex; var c=document.createElement("canvas"); c.width=c.height=96; var g=c.getContext("2d");
@@ -949,8 +953,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function makeLock(){ var s=new TH.Sprite(new TH.SpriteMaterial({map:lockTex(),depthTest:false,depthWrite:false,transparent:true})); s.scale.set(0.7,0.7,0.7); s.position.set(0,0.95,0); s.visible=false; s.renderOrder=999; return s; }
     function makeDie(){
       var geo = TH.RoundedBoxGeometry?new TH.RoundedBoxGeometry(DS,DS,DS,4,0.075):new TH.BoxGeometry(DS,DS,DS);
-      var mat = TH.MeshPhysicalMaterial ? new TH.MeshPhysicalMaterial({color:BASE_COL, roughness:0.48, metalness:0.0, clearcoat:0.4, clearcoatRoughness:0.32, envMapIntensity:0.5})
-                                        : new TH.MeshStandardMaterial({color:BASE_COL, roughness:0.5, metalness:0.0, envMapIntensity:0.5});
+      var mat = TH.MeshPhysicalMaterial ? new TH.MeshPhysicalMaterial({color:BASE_COL, roughness:0.42, metalness:0.0, clearcoat:0.45, clearcoatRoughness:0.28, envMapIntensity:0.35})
+                                        : new TH.MeshStandardMaterial({color:BASE_COL, roughness:0.46, metalness:0.0, envMapIntensity:0.35});
       var m=new TH.Mesh(geo,mat); m.castShadow=true; m.receiveShadow=true;
       var pipGeo=new TH.SphereGeometry(0.076,16,12);
       var faces=[{v:1,n:[1,0,0],a:[0,1,0],b:[0,0,1]},{v:6,n:[-1,0,0],a:[0,1,0],b:[0,0,-1]},
@@ -965,20 +969,20 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function faceUpQuat(v){ var n=LN[v]; return new TH.Quaternion().setFromUnitVectors(new TH.Vector3(n[0],n[1],n[2]),new TH.Vector3(0,1,0)); }
     function topFace(mesh){ var best=1,bd=-2; for(var v=1;v<=6;v++){ var n=LN[v]; var w=new TH.Vector3(n[0],n[1],n[2]).applyQuaternion(mesh.quaternion); if(w.y>bd){bd=w.y;best=v;} } return best; }
     function upNormalY(mesh){ var bd=-2; for(var v=1;v<=6;v++){ var n=LN[v]; var y=new TH.Vector3(n[0],n[1],n[2]).applyQuaternion(mesh.quaternion).y; if(y>bd) bd=y; } return bd; } // ~1 = lying perfectly flat
-    function addWall(x,y,z,hx,hy,hz){ var b=new CN.Body({mass:0,material:floorMat}); b.addShape(new CN.Box(new CN.Vec3(hx,hy,hz))); b.position.set(x,y,z); world.addBody(b); }
+    function addWall(x,y,z,hx,hy,hz){ var b=new CN.Body({mass:0,material:wallMat}); b.addShape(new CN.Box(new CN.Vec3(hx,hy,hz))); b.position.set(x,y,z); b._env="wall"; world.addBody(b); }
 
     function init(canvas){ if(inited||!supported()) return; canvasEl=canvas;
       renderer=new TH.WebGLRenderer({canvas:canvas,antialias:true,alpha:false,powerPreference:"high-performance"});
       renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,3)); renderer.shadowMap.enabled=true; renderer.shadowMap.type=TH.PCFSoftShadowMap;
       if(TH.sRGBEncoding) renderer.outputEncoding=TH.sRGBEncoding;
-      if(TH.ACESFilmicToneMapping){ renderer.toneMapping=TH.ACESFilmicToneMapping; renderer.toneMappingExposure=1.06; }
+      if(TH.ACESFilmicToneMapping){ renderer.toneMapping=TH.ACESFilmicToneMapping; renderer.toneMappingExposure=0.92; }
       scene=new TH.Scene(); scene.background=new TH.Color(0x1f3f37); scene.fog=new TH.Fog(0x1f3f37,13,30); // felt fades to depth
       camera=new TH.PerspectiveCamera(36,3,0.1,120); camera.position.set(0,9.2,5.2); camera.lookAt(0,0,0.3);
       try{ var pm=new TH.PMREMGenerator(renderer); if(TH.RoomEnvironment){ scene.environment=pm.fromScene(new TH.RoomEnvironment(renderer),0.04).texture; } }catch(e){}
-      scene.add(new TH.HemisphereLight(0xdfe8ff,0x223029,0.5));
-      var key=new TH.DirectionalLight(0xffffff,2.0); key.position.set(4.5,8,6.5); key.castShadow=true;   // angled → every die drops a visible shadow
+      scene.add(new TH.HemisphereLight(0xdfe8ff,0x1c2620,0.32));                                          // lower ambient → richer colour + contrast
+      var key=new TH.DirectionalLight(0xfff3e0,2.3); key.position.set(4.5,8,6.5); key.castShadow=true;    // warm, strong key
       key.shadow.mapSize.set(2048,2048); var sc=key.shadow.camera; sc.near=1; sc.far=44; sc.left=-12; sc.right=12; sc.top=8; sc.bottom=-8; key.shadow.bias=-0.0004; key.shadow.radius=2.5; scene.add(key);
-      var fill=new TH.DirectionalLight(0xcfe0d8,0.35); fill.position.set(-5,6,-3); scene.add(fill);
+      var fill=new TH.DirectionalLight(0xbcd0c6,0.22); fill.position.set(-5,6,-3); scene.add(fill);
       var floor=new TH.Mesh(new TH.PlaneGeometry(44,28), new TH.MeshStandardMaterial({map:feltTex(),roughness:0.97,metalness:0})); floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
       var rimMat=new TH.MeshStandardMaterial({color:0x5a4127,roughness:0.72,metalness:0.04});             // wooden tray rim (depth cue)
       function rim(w,h,d,x,y,z){ var bx=new TH.Mesh(new TH.BoxGeometry(w,h,d),rimMat); bx.position.set(x,y,z); bx.castShadow=true; bx.receiveShadow=true; scene.add(bx); }
@@ -986,17 +990,18 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       rim(0.45,0.55,2*FZ+1.0, -(FX+0.35),0.24,0);    // left
       rim(0.45,0.55,2*FZ+1.0,  (FX+0.35),0.24,0);    // right
       rim(2*FX+1.0,0.17,0.45, 0,0.075,(FZ+0.35));    // front (low, so you can see in)
-      world=new CN.World(); world.gravity.set(0,-33,0); world.broadphase=new CN.NaiveBroadphase(); world.allowSleep=false;
-      dtMat=new CN.Material("d"); floorMat=new CN.Material("f");
-      world.addContactMaterial(new CN.ContactMaterial(dtMat,floorMat,{friction:0.5,restitution:0.5}));
-      world.addContactMaterial(new CN.ContactMaterial(dtMat,dtMat,{friction:0.3,restitution:0.4}));
-      var fb=new CN.Body({mass:0,material:floorMat}); fb.addShape(new CN.Plane()); fb.quaternion.setFromAxisAngle(new CN.Vec3(1,0,0),-Math.PI/2); world.addBody(fb);
+      world=new CN.World(); world.gravity.set(0,-36,0); world.broadphase=new CN.NaiveBroadphase(); world.allowSleep=false;
+      dtMat=new CN.Material("d"); floorMat=new CN.Material("f"); wallMat=new CN.Material("w");
+      world.addContactMaterial(new CN.ContactMaterial(dtMat,floorMat,{friction:0.45,restitution:0.5}));
+      world.addContactMaterial(new CN.ContactMaterial(dtMat,dtMat,{friction:0.06,restitution:0.4}));   // low → dice don't stack/lean on each other
+      world.addContactMaterial(new CN.ContactMaterial(dtMat,wallMat,{friction:0.02,restitution:0.35})); // near-frictionless walls → a leaning die slides down flat
+      var fb=new CN.Body({mass:0,material:floorMat}); fb.addShape(new CN.Plane()); fb.quaternion.setFromAxisAngle(new CN.Vec3(1,0,0),-Math.PI/2); fb._env="floor"; world.addBody(fb);
       addWall(FX,2,0,0.3,5,FZ+1.2); addWall(-FX,2,0,0.3,5,FZ+1.2); addWall(0,2,FZ+0.4,FX+1.2,5,0.3); addWall(0,2,-FZ-0.4,FX+1.2,5,0.3);
       inited=true; canvas.style.touchAction="none"; canvas.addEventListener("pointerdown",onPick);
       resume();
     }
     function ensureDice(n){ while(dice.length<n){ var m=makeDie(); scene.add(m); var lk=makeLock(); scene.add(lk);
-        var body=new CN.Body({mass:1,material:dtMat}); body.addShape(new CN.Box(new CN.Vec3(0.5,0.5,0.5))); body.allowSleep=false; body.linearDamping=0.05; body.angularDamping=0.08; world.addBody(body);
+        var body=new CN.Body({mass:1,material:dtMat}); body.addShape(new CN.Box(new CN.Vec3(0.5,0.5,0.5))); body.allowSleep=false; body.linearDamping=0.14; body.angularDamping=0.19; world.addBody(body);
         body.addEventListener("collide",onCollide);
         dice.push({mesh:m,body:body,lock:lk,held:false,value:1,snapTo:null,snapFrom:null,snapT:0}); }
       N=n; for(var i=0;i<dice.length;i++){ var vis=(i<n); dice[i].mesh.visible=vis; if(!vis) dice[i].lock.visible=false; } }
@@ -1004,7 +1009,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function setDynamic(b,dyn){ b.type=dyn?CN.Body.DYNAMIC:CN.Body.STATIC; b.mass=dyn?1:0; b.updateMassProperties(); if(dyn) b.wakeUp(); }
     function lockPos(d){ if(d.lock) d.lock.position.set(d.body.position.x,d.body.position.y+0.92,d.body.position.z); }
     function applyHeld(d){ var m=d.mesh.material;
-      if(d.held){ if(m.color) m.color.setHex(0x5fe3d2); if(m.emissive){ m.emissive.setHex(0x0f766e); m.emissiveIntensity=0.7; } if(d.lock){ d.lock.visible=true; lockPos(d); } }
+      if(d.held){ if(m.color) m.color.setHex(0xf2a52c); if(m.emissive){ m.emissive.setHex(0xd07a00); m.emissiveIntensity=0.6; } if(d.lock){ d.lock.visible=true; lockPos(d); } } // warm gold, clearly different from the white dice
       else { if(m.color) m.color.setHex(BASE_COL); if(m.emissive){ m.emissive.setHex(0x000000); m.emissiveIntensity=0; } if(d.lock) d.lock.visible=false; } }
     function freeSpot(self){ var bx=0,bz=0,best=-1,tries; for(tries=0;tries<14;tries++){ var x=(Math.random()*2-1)*(FX-1.3), z=(Math.random()*2-1)*(FZ-0.7), md=99,j;
         for(j=0;j<N;j++){ if(j===self) continue; var dx=x-dice[j].body.position.x, dz=z-dice[j].body.position.z, dd=Math.sqrt(dx*dx+dz*dz); if(dd<md) md=dd; }
@@ -1023,13 +1028,13 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     // Physics-authoritative throw: dice land naturally; result is read from where they stop (no forcing).
     function throwDice(prevValues,held,opts,cb){ if(!inited){ if(cb)cb(); return; } var n=prevValues.length; ensureDice(n); opts=opts||{}; shownKey=opts.key||shownKey;
       var power=Math.max(0.6,Math.min(2.4,opts.power||1)), dir=opts.dir||[0,1], seed=(opts.seed||1)>>>0, rnd=mulberry(seed);
-      settleCb=cb; snapIx=[]; restT=0; accum=0; lastT=0; throwStart=now(); declumps=0; animating=true; phase="throw";
+      settleCb=cb; snapIx=[]; restT=0; accum=0; lastT=0; throwStart=now(); declumps=0; simSteps=0; animating=true; phase="throw";
       for(var i=0;i<n;i++){ var d=dice[i]; d.held=!!(held&&held[i]); d.snapTo=null; applyHeld(d);
         if(d.held){ setDynamic(d.body,false); d.body.velocity.setZero(); d.body.angularVelocity.setZero(); sync(d); continue; } // freeze held die exactly where it lies
         setDynamic(d.body,true);
-        d.body.position.set(slotX(i,n)+(rnd()-0.5)*0.8, 4.2+rnd()*1.3, -FZ+0.5+rnd()*0.6);
-        var p=2.4+power*3.2;
-        d.body.velocity.set(dir[0]*p+(rnd()-0.5)*3, -5-rnd()*2, Math.abs(dir[1])*p+2.2+(rnd()-0.5)*2);
+        d.body.position.set(slotX(i,n)+(rnd()-0.5)*1.0, 4.0+rnd()*1.6, (rnd()-0.5)*(2*FZ-1.4)); // spread across the whole tray
+        var p=1.8+power*2.6;
+        d.body.velocity.set(dir[0]*p+(rnd()-0.5)*2.6, -5-rnd()*2, dir[1]*p*0.5+(rnd()-0.5)*2.6);   // scatter, not clustered toward the front
         var s=15+power*10; d.body.angularVelocity.set((rnd()-0.5)*s,(rnd()-0.5)*s,(rnd()-0.5)*s);
         snapIx.push(i);
       }
@@ -1047,13 +1052,13 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         d.snapFrom=cur; d.snapTo=align.multiply(cur.clone()); d.snapT=0; }); }
     function loop(){ if(!running) return; rafId=requestAnimationFrame(loop);
       if(phase==="throw"){ var t=now(); if(!lastT) lastT=t; var dt=(t-lastT)/1000; lastT=t; if(dt>0.1) dt=0.1;
-        accum+=dt; var guard=0; while(accum>=1/60 && guard<8){ world.step(1/60); accum-=1/60; guard++; }
+        accum+=dt; var guard=0; while(accum>=1/60 && guard<8){ world.step(1/60); simSteps++; accum-=1/60; guard++; }
         var moving=0; for(var i=0;i<N;i++){ sync(dice[i]); if(dice[i].lock&&dice[i].lock.visible) lockPos(dice[i]); }
         snapIx.forEach(function(i){ var b=dice[i].body; if(b.velocity.length()>0.26||b.angularVelocity.length()>0.4) moving++; });
         if(moving===0) restT+=dt; else restT=0;
         if(restT>0.24 || (t-throwStart)>7500){
-          // re-drop any die that is stacked (elevated) OR not lying flat (tilted / on an edge)
-          var redrop=(declumps<7)?snapIx.filter(function(i){ return dice[i].body.position.y>0.62 || upNormalY(dice[i].mesh)<0.985; }):[];
+          // re-drop only clearly-wrong dice: genuinely stacked, or strongly tilted (a flat die is ~1.0)
+          var redrop=(declumps<6)?snapIx.filter(function(i){ return dice[i].body.position.y>0.8 || upNormalY(dice[i].mesh)<0.86; }):[];
           if(redrop.length){ declumps++; restT=0; redrop.forEach(function(i){ var s2=freeSpot(i); dice[i].body.position.set(s2[0],3.0+Math.random()*0.6,s2[1]);
               dice[i].body.velocity.set((Math.random()-0.5)*1.4,-3.8,(Math.random()-0.5)*1.4); dice[i].body.angularVelocity.set((Math.random()-0.5)*8,(Math.random()-0.5)*8,(Math.random()-0.5)*8); }); }
           else { snapIx.forEach(function(i){ dice[i].body.velocity.setZero(); dice[i].body.angularVelocity.setZero(); sync(dice[i]); }); phase="idle"; animating=false; var cb=settleCb; settleCb=null; if(cb) cb(); }
@@ -1078,7 +1083,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     return { supported:supported, init:init, showStatic:showStatic, clearDice:clearDice, throwDice:throwDice, reflect:reflect, resize:resize, resume:resume, pause:pause,
       setHeld:setHeld, faces:faces, reconcile:reconcile, onPick:function(cb){ pickCb=cb; }, onImpact:function(cb){ impactCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
       _topFace:function(i){ return dice[i]?topFace(dice[i].mesh):0; },
-      _debug:function(i){ var d=dice[i]; return d?{x:+d.body.position.x.toFixed(3),y:+d.body.position.y.toFixed(3),z:+d.body.position.z.toFixed(3),flat:+upNormalY(d.mesh).toFixed(3),held:d.held,lock:d.lock?d.lock.visible:false,color:(d.mesh.material.color?d.mesh.material.color.getHex():0),n:N}:null; } };
+      _debug:function(i){ var d=dice[i]; return d?{x:+d.body.position.x.toFixed(3),y:+d.body.position.y.toFixed(3),z:+d.body.position.z.toFixed(3),flat:+upNormalY(d.mesh).toFixed(3),held:d.held,lock:d.lock?d.lock.visible:false,color:(d.mesh.material.color?d.mesh.material.color.getHex():0),n:N}:null; },
+      _declumps:function(){ return declumps; }, _simTime:function(){ return +(simSteps/60).toFixed(2); } };
   })();
   window.__DICE3D=Dice3D;
 
@@ -1237,7 +1243,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var canvas=tray3d.querySelector("#dice3d");
     if(!Dice3D.inited()){ Dice3D.init(canvas);
       Dice3D.onPick(function(ix){ if(!diceRolling && state.game.live.rollNo>=1 && !gameComplete()){ toggleHold(ix); sfxTick(); vibrate(18); } });
-      Dice3D.onImpact(function(vel){ sfxBounce(vel); if(vel>3.2) vibrate(Math.min(45,Math.round(9+vel*2.2))); }); }
+      Dice3D.onImpact(function(vel,kind){ sfxBounce(vel,kind); if(vel>3.2) vibrate(Math.min(45,Math.round(9+vel*2.2))); }); }
     Dice3D.resume(); Dice3D.resize();
     var nLocked=0; if(live.rollNo>=1){ for(var li=0;li<live.held.length;li++) if(live.held[li]) nLocked++; }
     tray3d.querySelector("#t3turn").innerHTML = (live.turnPid?("<b>"+esc(turnName)+"</b>s tur · kast "+live.rollNo+"/3"):"") + (nLocked?' · <span style="color:var(--brand);font-weight:800">🔒 '+nLocked+' låst'+(nLocked>1?'a':'')+'</span>':'');
