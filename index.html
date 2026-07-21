@@ -628,7 +628,11 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
   // ---------------------------------------------------------------- Sound (Web Audio, no files)
   var soundOn = localStorage.getItem("yz_sound")!=="0", actx=null;
-  function ensureAudio(){ if(!soundOn) return null; try{ if(!actx){ var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null; actx=new AC(); } if(actx.state==="suspended") actx.resume(); }catch(e){ actx=null; } return actx; }
+  function ensureAudio(){ if(!soundOn) return null; try{
+      if(actx && actx.state==="closed"){ actx=null; }
+      if(!actx){ var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null; actx=new AC(); }
+      if(actx.state!=="running"){ actx.resume(); }
+    }catch(e){ actx=null; } return actx; }
   function beep(freq,dur,type,vol,when){ var a=ensureAudio(); if(!a) return; try{ var o=a.createOscillator(),gain=a.createGain(); o.type=type||"sine"; o.frequency.value=freq; var t0=a.currentTime+(when||0); gain.gain.setValueAtTime(0.0001,t0); gain.gain.exponentialRampToValueAtTime(vol||0.14,t0+0.012); gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur); o.connect(gain); gain.connect(a.destination); o.start(t0); o.stop(t0+dur+0.03); }catch(e){} }
   var _noiseBuf=null;
   function noiseBuf(a){ if(_noiseBuf) return _noiseBuf; var n=Math.floor(a.sampleRate*0.12); var buf=a.createBuffer(1,n,a.sampleRate); var ch=buf.getChannelData(0); for(var i=0;i<n;i++) ch[i]=(Math.random()*2-1); _noiseBuf=buf; return buf; }
@@ -650,13 +654,12 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var hapticsOn = localStorage.getItem("yz_haptics")!=="0";
   function vibrate(ms){ if(!hapticsOn) return; try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
   function toggleHaptics(){ hapticsOn=!hapticsOn; localStorage.setItem("yz_haptics",hapticsOn?"1":"0"); if(hapticsOn) vibrate([20,40,20]); toast(hapticsOn?"Vibration på 📳":"Vibration av"); }
-  // Unlock/keep-alive the audio context (iOS Safari suspends it between sounds and needs an in-gesture buffer play)
-  var _audioUnlocked=false;
-  function unlockAudio(){ var a=ensureAudio(); if(!a) return; try{ if(a.state==="suspended") a.resume();
-      if(!_audioUnlocked){ var s=a.createBufferSource(); s.buffer=a.createBuffer(1,1,22050); s.connect(a.destination); s.start(0); _audioUnlocked=true; } }catch(e){} }
+  // Keep audio alive: iOS suspends/interrupts the context when the tab is left; re-unlock on every tap with an in-gesture silent play.
+  function unlockAudio(){ var a=ensureAudio(); if(!a) return; try{ if(a.state!=="running") a.resume();
+      var s=a.createBufferSource(); s.buffer=a.createBuffer(1,1,22050); s.connect(a.destination); s.start(0); }catch(e){} }
   document.addEventListener("pointerdown", unlockAudio, { passive:true });
   document.addEventListener("touchend", unlockAudio, { passive:true });
-  document.addEventListener("visibilitychange", function(){ if(!document.hidden){ try{ if(actx&&actx.state==="suspended") actx.resume(); }catch(e){} } });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) unlockAudio(); });
 
   // ============================================================ IDENTITY + ROOM
   var clientId = localStorage.getItem("yz_cid");
@@ -952,7 +955,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       _lockTex=new TH.CanvasTexture(c); _lockTex.needsUpdate=true; return _lockTex; }
     function makeLock(){ var s=new TH.Sprite(new TH.SpriteMaterial({map:lockTex(),depthTest:false,depthWrite:false,transparent:true})); s.scale.set(0.7,0.7,0.7); s.position.set(0,0.95,0); s.visible=false; s.renderOrder=999; return s; }
     function makeDie(){
-      var geo = TH.RoundedBoxGeometry?new TH.RoundedBoxGeometry(DS,DS,DS,4,0.075):new TH.BoxGeometry(DS,DS,DS);
+      var geo = TH.RoundedBoxGeometry?new TH.RoundedBoxGeometry(DS,DS,DS,5,0.13):new TH.BoxGeometry(DS,DS,DS);
       var mat = TH.MeshPhysicalMaterial ? new TH.MeshPhysicalMaterial({color:BASE_COL, roughness:0.42, metalness:0.0, clearcoat:0.45, clearcoatRoughness:0.28, envMapIntensity:0.35})
                                         : new TH.MeshStandardMaterial({color:BASE_COL, roughness:0.46, metalness:0.0, envMapIntensity:0.35});
       var m=new TH.Mesh(geo,mat); m.castShadow=true; m.receiveShadow=true;
@@ -1216,7 +1219,11 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var shakeArmed=false, shakeCooldown=0, lastAcc=null;
   function shakeSupported(){ try{ return typeof window!=="undefined" && "DeviceMotionEvent" in window; }catch(e){ return false; } }
   function armShake(){
-    function attach(){ if(shakeArmed) return; shakeArmed=true; window.addEventListener("devicemotion",onMotion); toast("Skaka för att kasta! 🎲"); renderAll(); }
+    function attach(){ if(shakeArmed) return; shakeArmed=true; window.addEventListener("devicemotion",onMotion); renderAll();
+      openSheet('<h3>🎲 Skaka för att kasta</h3><p class="sub">Skaka telefonen för att rulla tärningarna.</p>'+
+        '<div class="hint">På iPhone kan iOS visa sin egen <b>"Ångra"-ruta</b> när du skakar. Stäng av den under <b>Inställningar → Hjälpmedel → Pekskärm → Skaka för att ångra</b>. Du kan alltid trycka på <b>Kasta</b>-knappen istället.</div>'+
+        '<button class="btn primary full" id="shOk" style="margin-top:12px">OK</button>');
+      var ok=$("shOk"); if(ok) ok.onclick=closeSheet; }
     try{ if(typeof DeviceMotionEvent!=="undefined" && typeof DeviceMotionEvent.requestPermission==="function"){
         DeviceMotionEvent.requestPermission().then(function(s){ if(s==="granted") attach(); else toast("Skakning nekades"); }).catch(function(){ toast("Kunde inte aktivera skakning"); });
       } else attach(); }catch(e){ attach(); }
