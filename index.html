@@ -659,7 +659,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       var s=a.createBufferSource(); s.buffer=a.createBuffer(1,1,22050); s.connect(a.destination); s.start(0); }catch(e){} }
   document.addEventListener("pointerdown", unlockAudio, { passive:true });
   document.addEventListener("touchend", unlockAudio, { passive:true });
-  document.addEventListener("visibilitychange", function(){ if(!document.hidden) unlockAudio(); });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden){ unlockAudio(); recover3D(); } });
+  window.addEventListener("pageshow", function(){ recover3D(); });
 
   // ============================================================ IDENTITY + ROOM
   var clientId = localStorage.getItem("yz_cid");
@@ -934,7 +935,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var Dice3D = (function(){
     var TH=window.THREE, CN=window.CANNON;
     var libs=!!(TH&&CN);
-    var renderer,scene,camera,world,dtMat,floorMat,wallMat,rafId=null,inited=false,canvasEl=null,running=false;
+    var renderer,scene,camera,world,dtMat,floorMat,wallMat,rafId=null,inited=false,canvasEl=null,running=false,ctxLost=false;
     var dice=[], N=0, animating=false, phase="idle", settleCb=null, restT=0, accum=0, lastT=0, throwStart=0, declumps=0, simSteps=0, snapIx=[], snapInc=0.14, pickCb=null, shownKey="", impactCb=null, lastVib=0;
     function onCollide(e){ if(phase!=="throw"||!impactCb) return; var c=e&&e.contact; if(!c||!c.getImpactVelocityAlongNormal) return; var v=Math.abs(c.getImpactVelocityAlongNormal()); if(v<1.3) return; var t=now(); if(t-lastVib<34) return; lastVib=t; var kind=(e.body&&e.body._env)?e.body._env:"die"; impactCb(v,kind); }
     var FX=6.4, FZ=2.3, DS=1.0;
@@ -1001,8 +1002,27 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       var fb=new CN.Body({mass:0,material:floorMat}); fb.addShape(new CN.Plane()); fb.quaternion.setFromAxisAngle(new CN.Vec3(1,0,0),-Math.PI/2); fb._env="floor"; world.addBody(fb);
       addWall(FX,2,0,0.3,5,FZ+1.2); addWall(-FX,2,0,0.3,5,FZ+1.2); addWall(0,2,FZ+0.4,FX+1.2,5,0.3); addWall(0,2,-FZ-0.4,FX+1.2,5,0.3);
       inited=true; canvas.style.touchAction="none"; canvas.addEventListener("pointerdown",onPick);
+      // Backgrounded PWAs (esp. iOS) lose the WebGL context to free memory. Physics/audio keep running,
+      // but the renderer only clears to the background — dice vanish. Handle loss + restoration.
+      canvas.addEventListener("webglcontextlost", function(e){ e.preventDefault(); ctxLost=true; pause(); }, false);
+      canvas.addEventListener("webglcontextrestored", function(){ ctxLost=false; rebuildGL(); resume(); }, false);
       resume();
     }
+    // Re-apply renderer state and regenerate the environment map after a context restore (three.js
+    // re-uploads geometries/textures itself, but the PMREM env render target is gone and must be rebuilt).
+    function rebuildGL(){ if(!renderer||!scene) return; try{
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,3)); renderer.shadowMap.enabled=true; renderer.shadowMap.type=TH.PCFSoftShadowMap;
+        if(TH.sRGBEncoding) renderer.outputEncoding=TH.sRGBEncoding;
+        if(TH.ACESFilmicToneMapping){ renderer.toneMapping=TH.ACESFilmicToneMapping; renderer.toneMappingExposure=0.92; }
+        try{ var pm=new TH.PMREMGenerator(renderer); if(TH.RoomEnvironment){ scene.environment=pm.fromScene(new TH.RoomEnvironment(renderer),0.04).texture; } }catch(e){}
+        resize();
+      }catch(e){} }
+    // Hard recovery for browsers that never restore the context on the same canvas (iOS Safari PWA):
+    // fully tear down GL/scene/physics and re-init on a fresh canvas. Dice are redrawn from app state.
+    function recover(newCanvas){ try{ pause(); }catch(e){}
+      try{ if(renderer){ renderer.dispose(); if(renderer.forceContextLoss) renderer.forceContextLoss(); } }catch(e){}
+      renderer=null; scene=null; camera=null; world=null; dice=[]; N=0; shownKey=""; phase="idle"; animating=false; running=false; inited=false; ctxLost=false; settleCb=null; snapIx=[];
+      init(newCanvas); }
     function ensureDice(n){ while(dice.length<n){ var m=makeDie(); scene.add(m); var lk=makeLock(); scene.add(lk);
         var body=new CN.Body({mass:1,material:dtMat}); body.addShape(new CN.Box(new CN.Vec3(0.5,0.5,0.5))); body.allowSleep=false; body.linearDamping=0.14; body.angularDamping=0.19; world.addBody(body);
         body.addEventListener("collide",onCollide);
@@ -1109,7 +1129,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function dieIndex(o){ while(o){ for(var i=0;i<dice.length;i++) if(dice[i].mesh===o) return i; o=o.parent; } return -1; }
     function setHeld(held){ for(var i=0;i<N;i++){ dice[i].held=!!(held&&held[i]); applyHeld(dice[i]); } }
     return { supported:supported, init:init, showStatic:showStatic, clearDice:clearDice, throwDice:throwDice, reflect:reflect, resize:resize, resume:resume, pause:pause,
-      setHeld:setHeld, faces:faces, reconcile:reconcile, onPick:function(cb){ pickCb=cb; }, onImpact:function(cb){ impactCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
+      setHeld:setHeld, faces:faces, reconcile:reconcile, recover:recover, onPick:function(cb){ pickCb=cb; }, onImpact:function(cb){ impactCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
+      isContextLost:function(){ try{ return !renderer || renderer.getContext().isContextLost(); }catch(e){ return true; } },
       _topFace:function(i){ return dice[i]?topFace(dice[i].mesh):0; },
       _debug:function(i){ var d=dice[i]; return d?{x:+d.body.position.x.toFixed(3),y:+d.body.position.y.toFixed(3),z:+d.body.position.z.toFixed(3),flat:+upNormalY(d.mesh).toFixed(3),held:d.held,lock:d.lock?d.lock.visible:false,color:(d.mesh.material.color?d.mesh.material.color.getHex():0),n:N}:null; },
       _declumps:function(){ return declumps; }, _simTime:function(){ return +(simSteps/60).toFixed(2); } };
@@ -1263,6 +1284,19 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   }
 
   var tray3d=null;
+  // Returning to the PWA after a long time: if the WebGL context died while backgrounded, the dice are
+  // invisible (only the background renders) even though physics/audio still work. Rebuild on a fresh canvas.
+  function recover3D(){
+    try{
+      if(!use3D() || !Dice3D.inited()) return;
+      if(!Dice3D.isContextLost()){ Dice3D.resize(); return; } // context fine — just make sure it's sized/running
+      var old=tray3d && tray3d.querySelector("#dice3d"); if(!old||!old.parentNode) return;
+      var fresh=document.createElement("canvas"); fresh.id="dice3d"; fresh.className="dicecanvas";
+      old.parentNode.replaceChild(fresh, old);
+      Dice3D.recover(fresh);   // full GL/scene rebuild on the new canvas
+      renderAll();             // redraws the current dice (values/held) from app state
+    }catch(e){}
+  }
   function renderTray3D(){
     var host=$("bottomHost"), live=state.game.live;
     if(gameComplete()){ document.body.classList.remove("d3d"); if(tray3d&&tray3d.parentNode) tray3d.parentNode.removeChild(tray3d); Dice3D.pause();
