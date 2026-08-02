@@ -113,6 +113,7 @@
   td.cell.tap { cursor:pointer; } td.cell.tap:active { background:var(--line); }
   td.cell.preview .val { background:transparent; border:1.5px solid var(--brand); color:var(--brand); font-weight:800; }
   td.cell.preview.zero .val { border-color:var(--empty-line); color:var(--muted); }
+  td.cell.preview.wait { cursor:default; } td.cell.preview.wait .val { border-style:dashed; opacity:.5; }
   th.player.active + tbody, .colactive { }
   tr.summary td, tr.summary th { background:var(--bg) !important; }
   tr.summary .cat { background:var(--bg); font-weight:800; }
@@ -809,19 +810,27 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       if((d.ts||0)>g.clearedAt){ var sc2=ensureScore(d.pid), ex2=sc2[d.cat];
         if(!ex2||(d.ts||0)>(ex2.ts||0)){ sc2[d.cat]={v:d.v,ts:d.ts||0,cid:d.cid}; g.last={pid:d.pid,cat:d.cat,yb:d.yb||0}; changed=true; }
         if(d.yb){ g.ybonus[d.pid]=(g.ybonus[d.pid]||0)+d.yb; changed=true; }
-        if(d.next && (d.ts||0)>=(g.live.ts||0)){ g.live={turnPid:d.next.turnPid,rollNo:0,values:[],held:[],seq:(g.live.seq||0)+1,ts:d.ts||0,cid:d.cid}; changed=true; } }
+        // Advance the turn whenever we still think it's the committer's turn — a commit definitively ends
+        // their turn, so don't let clock skew between phones drop the hand-off (this was the "still X's tur" bug).
+        if(d.next && ((d.ts||0)>=(g.live.ts||0) || g.live.turnPid===d.pid)){ g.live={turnPid:d.next.turnPid,rollNo:0,values:[],held:[],seq:(g.live.seq||0)+1,ts:Math.max((d.ts||0),(g.live.ts||0)+1),cid:d.cid}; setRolling(false); changed=true; } }
     } else if(d.t==="live"){
-      if((d.ts||0)>(g.live.ts||0)){ g.live={turnPid:d.turnPid,rollNo:d.rollNo,values:d.values||[],held:d.held||[],seq:d.seq||0,ts:d.ts||0,cid:d.cid,rolled:d.rolled};
+      // Order live updates by (ts, seq, cid) so rapid holds sharing a millisecond aren't dropped — the
+      // seq tiebreak keeps them cumulative, and cid makes any true tie deterministic on every device.
+      var dt=(d.ts||0), ct=(g.live.ts||0), ds=(d.seq||0), cs=(g.live.seq||0);
+      var newer = dt>ct || (dt===ct && ds>cs) || (dt===ct && ds===cs && String(d.cid)>String(g.live.cid||""));
+      if(newer){ g.live={turnPid:d.turnPid,rollNo:d.rollNo,values:d.values||[],held:d.held||[],seq:d.seq||0,ts:d.ts||0,cid:d.cid,rolled:d.rolled};
         changed=true;
         if(d.rolled && d.seq>lastSeq){ lastSeq=d.seq; triggerDiceRoll(d, d.cid===clientId); } }
     } else if(d.t==="diceval"){
       if(g.live.turnPid===d.turnPid && g.live.rollNo===d.rollNo){
-        var key=d.turnPid+"/"+d.rollNo; authVals[key]=d.values.slice();
+        var key=d.turnPid+"/"+d.rollNo; var had=!!authVals[key]; authVals[key]=d.values.slice();
         var same=g.live.values.length===d.values.length && g.live.values.every(function(x,ix){return x===d.values[ix];});
         if(!same){ g.live.values=d.values.slice(); changed=true; }
         var initd=(d.cid===clientId);
-        if(initd || !use3D() || !Dice3D.inited() || !Dice3D.isAnimating()){ finalizeDice(key, initd); }
-        // else: still animating on this remote → its throw's settle callback will reconcile
+        if(initd){ finalizeDice(key, true); }                                     // roller already rests on this result
+        else if(had && same && !diceRolling && !Dice3D.isAnimating()){ /* duplicate delta, already settled */ }
+        else if(use3D() && Dice3D.inited()){ setRolling(true); Dice3D.settleTo(d.values.slice(), function(){ finalizeDice(key,false); }); } // remote: settle onto the authoritative faces (interrupts the tumble)
+        else { finalizeDice(key, false); }
       }
     } else if(d.t==="gameover"){
       if(d.no===g.no){
@@ -838,7 +847,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       var sc3=g.scores[d.pid];
       if(sc3 && sc3[d.cat]!=null){ delete sc3[d.cat]; changed=true; }
       if(d.yb){ g.ybonus[d.pid]=Math.max(0,(g.ybonus[d.pid]||0)-d.yb); changed=true; }
-      if(state.cfg.mode==="digital" && (d.ts||0)>=(g.live.ts||0)){ g.live={turnPid:d.pid,rollNo:0,values:[],held:[],seq:(g.live.seq||0)+1,ts:d.ts||0,cid:d.cid}; changed=true; }
+      if(state.cfg.mode==="digital"){ g.live={turnPid:d.pid,rollNo:0,values:[],held:[],seq:(g.live.seq||0)+1,ts:Math.max((d.ts||0),(g.live.ts||0)+1),cid:d.cid}; setRolling(false); changed=true; }
       if(g.last){ g.last=null; changed=true; }
     }
     if(changed){ saveLocal(); renderAll(); }
@@ -848,6 +857,14 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   window.__YZ.apply = function(d){ applyDelta(d,false); };
   window.__YZ.live = function(){ return state.game.live; };
   window.__YZ.rolling = function(){ return diceRolling; };
+  window.__YZ.pids = function(){ return playerList(); };
+  window.__YZ.me = function(){ return mePid; };
+  window.__YZ.setMe = function(pid){ mePid=pid; try{ localStorage.setItem(meKey,pid); }catch(e){} renderAll(); };
+  window.__YZ.roll = function(o){ rollDice(o); };
+  window.__YZ.commit = function(pid,cat){ commit(pid,cat); };
+  window.__YZ.controls = function(){ return controlsTurn(); };
+  window.__YZ.addPlayer = function(n){ addPlayer(n); };
+  window.__YZ.hold = function(i){ toggleHold(i); };
   window.__YZ.snapshot = function(){ var pl=playerList(); return { players:pl.map(function(id){return state.players[id].name;}),
     variant:state.cfg.variant, mode:state.cfg.mode, series:state.cfg.series,
     totals:pl.map(function(id){return derive(id).total;}), historyLen:state.history.length,
@@ -868,10 +885,18 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
   // Dice
   function myTurn(){ return state.cfg.mode==="digital" && state.game.live.turnPid; }
-  var diceRolling=false, authVals={};
+  // Turn ownership: a device may act as player `pid` only if it hasn't claimed a different seat.
+  // Once you mark "(du)" on a player, only your device can roll/hold/score on that player's turn —
+  // so you can no longer roll for the other phone. An unclaimed device (mePid null) still controls
+  // everything, so a single shared phone passed around keeps working.
+  function canControl(pid){ if(state.cfg.mode!=="digital") return true; return mePid==null || mePid===pid; }
+  function controlsTurn(){ var t=state.game.live.turnPid; return !!(t && canControl(t)); }
+  var diceRolling=false, authVals={}, rollWatchdog=null;
+  function setRolling(v){ diceRolling=v; if(rollWatchdog){ clearTimeout(rollWatchdog); rollWatchdog=null; }
+    if(v){ rollWatchdog=setTimeout(function(){ diceRolling=false; renderAll(); },6500); } } // never let the roll state stick
   function use3D(){ return state.cfg.mode==="digital" && Dice3D.supported(); }
   function rollDice(opts){
-    var g=state.game, live=g.live; if(state.cfg.mode!=="digital") return; if(!live.turnPid) live.turnPid=playerList()[0];
+    var g=state.game, live=g.live; if(state.cfg.mode!=="digital") return; if(!controlsTurn()) return; if(!live.turnPid) live.turnPid=playerList()[0];
     if(live.rollNo>=3 || diceRolling) return;
     var n=V().dice, held, i;
     if(live.values.length!==n){ held=[]; for(i=0;i<n;i++) held.push(false); } else held=live.held.slice();
@@ -885,26 +910,27 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:vals,held:held,seq:seq,rolled:true,seed:seed,power:power,dir:dir});
     }
   }
-  // Physics decides the result: throw, let the dice land, then read the faces where they stop.
+  // The ROLLER's physics is authoritative: throw, let the dice land, read the faces, broadcast them.
+  // Every other device tumbles for show only and then settles onto the roller's faces (see settleTo),
+  // so both phones always end on the exact same result instead of each running divergent physics.
   function triggerDiceRoll(d, initiated){
     var key=d.turnPid+"/"+d.rollNo;
-    if(use3D() && Dice3D.inited()){ diceRolling=true;
+    if(use3D() && Dice3D.inited()){ setRolling(true);
       if(d.values && d.values.length){ authVals[key]=d.values.slice(); } // came from a non-WebGL device
       Dice3D.throwDice(d.prev||[], d.held, {power:d.power,dir:d.dir,seed:d.seed,key:key}, function(){
         if(initiated){ emit({t:"diceval",values:Dice3D.faces(),rollNo:d.rollNo,turnPid:d.turnPid}); }
-        else if(authVals[key]){ finalizeDice(key,false); }  // authoritative already here → reconcile
-        // else: wait for the diceval delta (arrives while no longer animating)
+        else if(authVals[key]){ Dice3D.settleTo(authVals[key].slice(), function(){ finalizeDice(key,false); }); } // roller's result already here → settle onto it
+        // else: rested before the result arrived; the diceval delta will settle us
       });
     } else if(use3D()){ // WebGL not ready yet: fall back to RNG so play isn't blocked
-      diceRolling=false; if(initiated){ var n=(d.prev||[]).length||V().dice, f=[],i; for(i=0;i<n;i++) f.push(d.held&&d.held[i]?d.prev[i]:die()); emit({t:"diceval",values:f,rollNo:d.rollNo,turnPid:d.turnPid}); }
-    } else { diceRolling=false; queueAnim(d.values,d.held); } }
-  function finalizeDice(key, initiated){ diceRolling=false;
-    if(!initiated && use3D() && Dice3D.inited()){ Dice3D.reconcile(authVals[key]||[], function(){ renderAll(); }); }
-    renderAll(); }
+      setRolling(false); if(initiated){ var n=(d.prev||[]).length||V().dice, f=[],i; for(i=0;i<n;i++) f.push(d.held&&d.held[i]?d.prev[i]:die()); emit({t:"diceval",values:f,rollNo:d.rollNo,turnPid:d.turnPid}); }
+    } else { setRolling(false); queueAnim(d.values,d.held); } }
+  function finalizeDice(key, initiated){ setRolling(false); renderAll(); }
   function queueAnim(vals,held){ setTimeout(function(){ animateRoll(vals,held); },0); }
-  function toggleHold(i){ var g=state.game,live=g.live; if(state.cfg.mode!=="digital"||live.rollNo<1) return; if(i>=V().dice) return;
+  function toggleHold(i){ var g=state.game,live=g.live; if(state.cfg.mode!=="digital"||live.rollNo<1) return; if(!controlsTurn()) return; if(i>=V().dice) return;
     var held=live.held.slice(); held[i]=!held[i]; emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo,values:live.values.slice(),held:held,seq:(live.seq||0)+1,rolled:false}); }
   function commit(pid,cat){
+    if(!canControl(pid)) return;                        // only the player whose turn it is may score it
     var g=state.game, live=g.live; var dice=live.values.slice(0,V().dice);
     var v=scoreCat(state.cfg.variant,cat,dice,filledMap(pid));
     var yb=0; if(state.cfg.variant==="yahtzee" && hi(dice,5)>0 && cellVal(pid,"yahtzee")===50) yb=100;
@@ -1073,6 +1099,23 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         var wN=new TH.Vector3(LN[values[i]][0],LN[values[i]][1],LN[values[i]][2]).applyQuaternion(cur);
         var align=new TH.Quaternion().setFromUnitVectors(wN,new TH.Vector3(0,1,0));
         d.snapFrom=cur; d.snapTo=align.multiply(cur.clone()); d.snapT=0; }); }
+    // Remote-viewer settle: the roller is authoritative. Whatever the (non-authoritative) tumble is doing
+    // on this device — mid-air or already at rest — smoothly bring every non-held die to lie flat showing
+    // the authoritative value, staying near where it currently is. This is what keeps both phones in sync:
+    // the remote never commits to its own divergent result, it settles onto the roller's.
+    function settleTo(values,cb){ if(!inited||!N){ if(cb)cb(); return; } var list=[];
+      for(var i=0;i<N;i++){ if(!dice[i].held) list.push(i); }
+      if(!list.length){ if(cb)cb(); return; }
+      snapIx=list; snapInc=0.11; phase="snap"; animating=true; settleCb=cb;
+      list.forEach(function(i){ var d=dice[i], v=values[i]||1; d.value=v;
+        setDynamic(d.body,false); d.body.velocity.setZero(); d.body.angularVelocity.setZero();
+        var cur=new TH.Quaternion(d.body.quaternion.x,d.body.quaternion.y,d.body.quaternion.z,d.body.quaternion.w);
+        var wN=new TH.Vector3(LN[v][0],LN[v][1],LN[v][2]).applyQuaternion(cur);            // where the target face points now
+        var align=new TH.Quaternion().setFromUnitVectors(wN,new TH.Vector3(0,1,0));        // shortest rotation to put it up
+        d.snapFrom=cur; d.snapTo=align.multiply(cur.clone()); d.snapT=0;
+        var cx=Math.max(-(FX-0.7),Math.min(FX-0.7,d.body.position.x)), cz=Math.max(-(FZ-0.7),Math.min(FZ-0.7,d.body.position.z));
+        d.snapPFrom=new TH.Vector3(d.body.position.x,d.body.position.y,d.body.position.z);
+        d.snapPTo=new TH.Vector3(cx,0.5,cz); }); }
     // Gently lay a resting-but-tilted die flat WITHOUT re-throwing it: keep the value it already shows,
     // just rotate its current top face to point straight up and lower it to the table. Far less jarring
     // than a re-drop, so leaning/edge-resting dice settle smoothly instead of being tossed again.
@@ -1129,7 +1172,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function dieIndex(o){ while(o){ for(var i=0;i<dice.length;i++) if(dice[i].mesh===o) return i; o=o.parent; } return -1; }
     function setHeld(held){ for(var i=0;i<N;i++){ dice[i].held=!!(held&&held[i]); applyHeld(dice[i]); } }
     return { supported:supported, init:init, showStatic:showStatic, clearDice:clearDice, throwDice:throwDice, reflect:reflect, resize:resize, resume:resume, pause:pause,
-      setHeld:setHeld, faces:faces, reconcile:reconcile, recover:recover, onPick:function(cb){ pickCb=cb; }, onImpact:function(cb){ impactCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
+      setHeld:setHeld, faces:faces, reconcile:reconcile, settleTo:settleTo, recover:recover, onPick:function(cb){ pickCb=cb; }, onImpact:function(cb){ impactCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
       isContextLost:function(){ try{ return !renderer || renderer.getContext().isContextLost(); }catch(e){ return true; } },
       _topFace:function(i){ return dice[i]?topFace(dice[i].mesh):0; },
       _debug:function(i){ var d=dice[i]; return d?{x:+d.body.position.x.toFixed(3),y:+d.body.position.y.toFixed(3),z:+d.body.position.z.toFixed(3),flat:+upNormalY(d.mesh).toFixed(3),held:d.held,lock:d.lock?d.lock.visible:false,color:(d.mesh.material.color?d.mesh.material.color.getHex():0),n:N}:null; },
@@ -1195,7 +1238,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         var allowed=catAllowed(id,cat.key);
         if(state.cfg.mode==="digital"){
           if(id===turnPid && canPreview && allowed){ var pv=scoreCat(state.cfg.variant,cat.key,dice,filledMap(id));
-            row+='<td class="cell tap preview'+(pv===0?" zero":"")+'" data-player="'+id+'" data-cat="'+cat.key+'" data-commit="1"><span class="val">'+pv+'</span></td>'; }
+            // Only the device seated as this player (or an unclaimed device) can tap to commit. On the
+            // waiting phone the same preview shows, but greyed and non-tappable — you can't score for them.
+            if(canControl(id)) row+='<td class="cell tap preview'+(pv===0?" zero":"")+'" data-player="'+id+'" data-cat="'+cat.key+'" data-commit="1"><span class="val">'+pv+'</span></td>';
+            else row+='<td class="cell preview wait'+(pv===0?" zero":"")+'" data-player="'+id+'" data-cat="'+cat.key+'"><span class="val">'+pv+'</span></td>'; }
           else if(id===turnPid && canPreview && !allowed){ row+='<td class="cell locked" data-player="'+id+'" data-cat="'+cat.key+'"><span class="val">🔒</span></td>'; }
           else row+='<td class="cell empty" data-player="'+id+'" data-cat="'+cat.key+'"><span class="val">·</span></td>';
         } else {
@@ -1277,7 +1323,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   function onMotion(e){ var a=e.accelerationIncludingGravity||e.acceleration; if(!a) return; var t=Date.now();
     if(lastAcc){ var dx=(a.x||0)-lastAcc.x, dy=(a.y||0)-lastAcc.y, dz=(a.z||0)-lastAcc.z; var mag=Math.sqrt(dx*dx+dy*dy+dz*dz);
       if(mag>15 && t-shakeCooldown>900){ shakeCooldown=t; var live=state.game.live;
-        if(state.cfg.mode==="digital" && !diceRolling && live.rollNo<3 && live.turnPid){
+        if(state.cfg.mode==="digital" && !diceRolling && live.rollNo<3 && live.turnPid && controlsTurn()){
           var power=Math.max(0.7,Math.min(2.4,mag/16)), dir=[Math.max(-1,Math.min(1,dx/12)),1];
           rollDice({power:power,dir:dir}); vibrate(30); } } }
     lastAcc={x:a.x||0,y:a.y||0,z:a.z||0};
@@ -1308,16 +1354,26 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     if(host.firstChild!==tray3d){ host.innerHTML=""; host.appendChild(tray3d); }
     var canvas=tray3d.querySelector("#dice3d");
     if(!Dice3D.inited()){ Dice3D.init(canvas);
-      Dice3D.onPick(function(ix){ if(!diceRolling && state.game.live.rollNo>=1 && !gameComplete()){ toggleHold(ix); sfxTick(); vibrate(18); } });
+      Dice3D.onPick(function(ix){ if(!diceRolling && state.game.live.rollNo>=1 && !gameComplete() && controlsTurn()){ toggleHold(ix); sfxTick(); vibrate(18); } });
       Dice3D.onImpact(function(vel,kind){ sfxBounce(vel,kind); if(vel>3.2) vibrate(Math.min(45,Math.round(9+vel*2.2))); }); }
     Dice3D.resume(); Dice3D.resize();
     var nLocked=0; if(live.rollNo>=1){ for(var li=0;li<live.held.length;li++) if(live.held[li]) nLocked++; }
-    tray3d.querySelector("#t3turn").innerHTML = (live.turnPid?("<b>"+esc(turnName)+"</b>s tur · kast "+live.rollNo+"/3"):"") + (nLocked?' · <span style="color:var(--brand);font-weight:800">🔒 '+nLocked+' låst'+(nLocked>1?'a':'')+'</span>':'');
-    var rollLabel = diceRolling?"🎲 Rullar…":(live.rollNo>=3?"Skriv in poäng ovan":(live.rollNo===0?"🎲 Kasta":"🎲 Kasta igen ("+(3-live.rollNo)+" kvar)"));
+    var mine=controlsTurn();                                          // does THIS device control the current turn?
+    var youName=(mePid&&state.players[mePid])?state.players[mePid].name:null;
+    var turnTxt = live.turnPid ? ((mine?"Din tur":("<b>"+esc(turnName)+"</b>s tur"))+" · kast "+live.rollNo+"/3") : "";
+    tray3d.querySelector("#t3turn").innerHTML = turnTxt + (nLocked?' · <span style="color:var(--brand);font-weight:800">🔒 '+nLocked+' låst'+(nLocked>1?'a':'')+'</span>':'');
     var undoB=(state.game.last?'<button class="undo" id="undoBtn" title="Ångra">↩︎</button>':'');
-    var shakeB=(shakeSupported()&&!shakeArmed?'<button class="undo" id="shakeBtn" title="Skaka för att kasta">📳</button>':'');
-    tray3d.querySelector("#t3act").innerHTML = undoB+shakeB+'<button class="roll" id="rollBtn"'+((live.rollNo>=3||diceRolling)?" disabled":"")+'>'+rollLabel+'</button>';
-    tray3d.querySelector("#t3hint").textContent = (live.rollNo<1?(shakeArmed?"Skaka telefonen eller tryck Kasta. Tryck på en tärning för att låsa den.":"Tryck Kasta för att rulla tärningarna. Tryck på en tärning för att låsa den."):"Tryck på tärningar för att låsa dem. Tryck en grön ruta för att skriva in.");
+    if(!mine){
+      // Waiting phone: no roll/hold/undo controls, just a clear "it's their turn" state.
+      tray3d.querySelector("#t3act").innerHTML = '<button class="roll" id="rollBtn" disabled>⏳ Väntar på '+esc(turnName)+'…</button>';
+      tray3d.querySelector("#t3hint").textContent = diceRolling ? (esc(turnName)+" kastar…") : (esc(turnName)+" spelar. Du ser tärningarna live och är strax på tur.");
+    } else {
+      var rollLabel = diceRolling?"🎲 Rullar…":(live.rollNo>=3?"Skriv in poäng ovan":(live.rollNo===0?"🎲 Kasta":"🎲 Kasta igen ("+(3-live.rollNo)+" kvar)"));
+      var shakeB=(shakeSupported()&&!shakeArmed?'<button class="undo" id="shakeBtn" title="Skaka för att kasta">📳</button>':'');
+      tray3d.querySelector("#t3act").innerHTML = undoB+shakeB+'<button class="roll" id="rollBtn"'+((live.rollNo>=3||diceRolling)?" disabled":"")+'>'+rollLabel+'</button>';
+      var nudge=(mePid==null && playerList().length>=2)?" · Tryck på ditt namn högst upp och välj ”Det här är jag” så bara du kan kasta på din tur.":"";
+      tray3d.querySelector("#t3hint").textContent = (live.rollNo<1?(shakeArmed?"Skaka telefonen eller tryck Kasta. Tryck på en tärning för att låsa den.":"Tryck Kasta för att rulla tärningarna. Tryck på en tärning för att låsa den."):"Tryck på tärningar för att låsa dem. Tryck en grön ruta för att skriva in.")+nudge;
+    }
     $("rollBtn").onclick=function(){ rollDice(); };
     var ub=$("undoBtn"); if(ub) ub.onclick=undoLast;
     var sb=$("shakeBtn"); if(sb) sb.onclick=armShake;
