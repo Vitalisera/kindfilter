@@ -670,7 +670,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var room=currentRoom(); if(!room){ room=rid(4); history.replaceState(null,"","#"+room); }
   var TOPIC="kindfilter_yatzy_v3_"+room, NTFY="https://ntfy.sh/", storeKey="yz3_"+room, meKey="yzme_"+room, sharedKey="yzshared_"+room;
   var mePid = localStorage.getItem(meKey) || null;
-  var BUILD = "2026-08-03 · sync3";                            // bump on each deploy so the live version is verifiable
+  var BUILD = "2026-08-03 · sync3b";                           // bump on each deploy so the live version is verifiable
   var sharedDevice = localStorage.getItem(sharedKey)==="1";   // "this phone is shared by everyone" — pass-around play
   function setSeat(pid){ mePid=pid; sharedDevice=false; try{ localStorage.setItem(meKey,pid); localStorage.removeItem(sharedKey); }catch(e){} renderAll(); }
   function setShared(){ mePid=null; sharedDevice=true; try{ localStorage.removeItem(meKey); localStorage.setItem(sharedKey,"1"); }catch(e){} renderAll(); }
@@ -1234,7 +1234,18 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     }
     function resume(){ if(running||!inited) return; running=true; loop(); }
     function pause(){ running=false; if(rafId) cancelAnimationFrame(rafId); rafId=null; }
-    function resize(){ if(!renderer||!canvasEl) return; var w=canvasEl.clientWidth,h=canvasEl.clientHeight; if(!w||!h) return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+    // Pick the tightest field of view that still shows the WHOLE tray at the current screen shape, so on a
+    // narrow phone a die out by the left/right edge is never cropped. Wide screens zoom in (bigger dice);
+    // narrow screens widen the view until both the full width and depth of the tray fit.
+    function frameTray(){ camera.updateMatrixWorld(true); camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+      var pts=[ new TH.Vector3(FX+0.7,0,0), new TH.Vector3(-(FX+0.7),0,0), new TH.Vector3(0,0,FZ+0.8), new TH.Vector3(0,0,-(FZ+0.8)) ];
+      function fits(f){ camera.fov=f; camera.updateProjectionMatrix();
+        for(var i=0;i<pts.length;i++){ var p=pts[i].clone().project(camera); if(Math.abs(p.x)>0.95||Math.abs(p.y)>0.95) return false; } return true; }
+      var lo=24, hi=86;
+      if(!fits(hi)){ camera.fov=hi; camera.updateProjectionMatrix(); return; }   // ultra-narrow: use widest and accept
+      for(var it=0; it<22; it++){ var f=(lo+hi)/2; if(fits(f)) hi=f; else lo=f; }
+      camera.fov=hi; camera.updateProjectionMatrix(); }
+    function resize(){ if(!renderer||!canvasEl) return; var w=canvasEl.clientWidth,h=canvasEl.clientHeight; if(!w||!h) return; renderer.setSize(w,h,false); camera.aspect=w/h; frameTray(); }
     var ray=null, ndc=null;
     function onPick(e){ if(animating||!pickCb) return; if(!ray){ ray=new TH.Raycaster(); ndc=new TH.Vector2(); }
       var r=canvasEl.getBoundingClientRect(); ndc.x=((e.clientX-r.left)/r.width)*2-1; ndc.y=-((e.clientY-r.top)/r.height)*2+1;
@@ -1247,7 +1258,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       isContextLost:function(){ try{ return !renderer || renderer.getContext().isContextLost(); }catch(e){ return true; } },
       _topFace:function(i){ return dice[i]?topFace(dice[i].mesh):0; },
       _debug:function(i){ var d=dice[i]; return d?{x:+d.body.position.x.toFixed(3),y:+d.body.position.y.toFixed(3),z:+d.body.position.z.toFixed(3),flat:+upNormalY(d.mesh).toFixed(3),held:d.held,lock:d.lock?d.lock.visible:false,color:(d.mesh.material.color?d.mesh.material.color.getHex():0),n:N}:null; },
-      _declumps:function(){ return declumps; }, _simTime:function(){ return +(simSteps/60).toFixed(2); } };
+      _declumps:function(){ return declumps; }, _simTime:function(){ return +(simSteps/60).toFixed(2); },
+      _ndc:function(i){ var d=dice[i]; if(!d) return null; camera.updateMatrixWorld(true); camera.matrixWorldInverse.copy(camera.matrixWorld).invert(); var p=new TH.Vector3(d.mesh.position.x,d.mesh.position.y,d.mesh.position.z).project(camera); return {x:+p.x.toFixed(3),y:+p.y.toFixed(3)}; },
+      _fov:function(){ return +camera.fov.toFixed(1); } };
   })();
   window.__DICE3D=Dice3D;
 
