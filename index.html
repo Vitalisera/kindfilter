@@ -162,6 +162,13 @@
   .tray .roll { flex:1; appearance:none; border:0; cursor:pointer; background:var(--brand); color:var(--brand-ink); border-radius:14px; padding:15px; font-size:16px; font-weight:800; }
   .tray .roll:disabled { background:var(--empty); color:var(--muted); }
   .tray .hint2 { text-align:center; font-size:11.5px; color:var(--muted); margin-top:7px; }
+  .trayhead { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .trayhead .tturn { flex:1; margin-bottom:0; }
+  .traytoggle { appearance:none; border:1px solid var(--line); background:var(--empty); color:var(--muted); border-radius:10px; padding:5px 11px; font-size:13px; font-weight:800; cursor:pointer; flex:0 0 auto; white-space:nowrap; }
+  /* Minimized dice table: hide the big 3D canvas + hint, shrink the space it reserves so the scoreboard gets it back */
+  body.d3d.tray-min .dicecanvas { display:none; }
+  body.d3d.tray-min .tray .hint2 { display:none; }
+  body.d3d.tray-min main { padding-bottom:138px; }
   .actionbar { position:fixed; left:0; right:0; bottom:0; z-index:15; background:linear-gradient(to top,var(--bg) 68%,transparent); padding:14px; display:flex; gap:10px; justify-content:center; }
   .actionbar button { appearance:none; border:0; cursor:pointer; border-radius:14px; padding:15px 18px; font-size:15px; font-weight:800; box-shadow:var(--shadow); }
   .actionbar .primary { background:var(--brand); color:var(--brand-ink); flex:1; max-width:280px; }
@@ -670,11 +677,17 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var room=currentRoom(); if(!room){ room=rid(4); history.replaceState(null,"","#"+room); }
   var TOPIC="kindfilter_yatzy_v3_"+room, NTFY="https://ntfy.sh/", storeKey="yz3_"+room, meKey="yzme_"+room, sharedKey="yzshared_"+room;
   var mePid = localStorage.getItem(meKey) || null;
-  var BUILD = "2026-08-03 · sync3b";                           // bump on each deploy so the live version is verifiable
+  var BUILD = "2026-08-03 · sync3c";                           // bump on each deploy so the live version is verifiable
   var sharedDevice = localStorage.getItem(sharedKey)==="1";   // "this phone is shared by everyone" — pass-around play
   function setSeat(pid){ mePid=pid; sharedDevice=false; try{ localStorage.setItem(meKey,pid); localStorage.removeItem(sharedKey); }catch(e){} renderAll(); }
   function setShared(){ mePid=null; sharedDevice=true; try{ localStorage.removeItem(meKey); localStorage.setItem(sharedKey,"1"); }catch(e){} renderAll(); }
   function clearSeat(){ mePid=null; sharedDevice=false; try{ localStorage.removeItem(meKey); localStorage.removeItem(sharedKey); }catch(e){} renderAll(); }
+  var trayMin = localStorage.getItem("yztraymin_"+room)==="1";   // dice table collapsed to a slim bar
+  function applyTrayMin(){ document.body.classList.toggle("tray-min", trayMin);
+    try{ Dice3D.setHidden(trayMin); }catch(e){}
+    var btn=document.getElementById("t3min"); if(btn) btn.textContent = trayMin ? "🎲 Visa" : "▁ Dölj";
+    if(!trayMin){ try{ Dice3D.resume(); Dice3D.resize(); }catch(e){} } }
+  function toggleTrayMin(){ trayMin=!trayMin; try{ localStorage.setItem("yztraymin_"+room, trayMin?"1":"0"); }catch(e){} applyTrayMin(); }
 
   // ============================================================ STATE
   function blankGame(no){ return { no:no||1, scores:{}, ybonus:{}, last:null, clearedAt:0, live:{turnPid:null,rollNo:0,values:[],held:[],seq:0,ts:0,cid:""}, startedTs:0, done:false }; }
@@ -979,7 +992,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var Dice3D = (function(){
     var TH=window.THREE, CN=window.CANNON;
     var libs=!!(TH&&CN);
-    var renderer,scene,camera,world,dtMat,floorMat,wallMat,rafId=null,inited=false,canvasEl=null,running=false,ctxLost=false;
+    var renderer,scene,camera,world,dtMat,floorMat,wallMat,rafId=null,inited=false,canvasEl=null,running=false,ctxLost=false,hidden=false;
     var dice=[], N=0, animating=false, phase="idle", settleCb=null, restT=0, accum=0, lastT=0, throwStart=0, declumps=0, simSteps=0, snapIx=[], snapInc=0.14, pickCb=null, shownKey="", impactCb=null, lastVib=0;
     var simRecording=false, simImpacts=null, simStep=0;                                  // headless-simulation capture
     var repFrames=null, repFaces=null, repImp=null, repN=0, repHeld=null, repStart=0, repCb=null, repImpIx=0;  // deterministic replay
@@ -1230,7 +1243,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         if(done2){ snapIx.forEach(function(i){ var d=dice[i]; d.body.quaternion.set(d.snapTo.x,d.snapTo.y,d.snapTo.z,d.snapTo.w);
             if(d.snapPTo){ d.body.position.set(d.snapPTo.x,d.snapPTo.y,d.snapPTo.z); d.snapPTo=null; d.snapPFrom=null; } sync(d); d.snapTo=null; }); phase="idle"; animating=false; var cb2=settleCb; settleCb=null; if(cb2) cb2(); }
       }
-      if(renderer) renderer.render(scene,camera);
+      if(renderer && !hidden) renderer.render(scene,camera);   // keep stepping (so roll callbacks fire) but skip drawing when minimized
     }
     function resume(){ if(running||!inited) return; running=true; loop(); }
     function pause(){ running=false; if(rafId) cancelAnimationFrame(rafId); rafId=null; }
@@ -1256,6 +1269,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     return { supported:supported, init:init, showStatic:showStatic, clearDice:clearDice, throwDice:throwDice, reflect:reflect, resize:resize, resume:resume, pause:pause,
       setHeld:setHeld, faces:faces, reconcile:reconcile, settleTo:settleTo, simulate:simulate, playRoll:playRoll, recover:recover, onPick:function(cb){ pickCb=cb; }, onImpact:function(cb){ impactCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
       isContextLost:function(){ try{ return !renderer || renderer.getContext().isContextLost(); }catch(e){ return true; } },
+      setHidden:function(b){ hidden=!!b; },
       _topFace:function(i){ return dice[i]?topFace(dice[i].mesh):0; },
       _debug:function(i){ var d=dice[i]; return d?{x:+d.body.position.x.toFixed(3),y:+d.body.position.y.toFixed(3),z:+d.body.position.z.toFixed(3),flat:+upNormalY(d.mesh).toFixed(3),held:d.held,lock:d.lock?d.lock.visible:false,color:(d.mesh.material.color?d.mesh.material.color.getHex():0),n:N}:null; },
       _declumps:function(){ return declumps; }, _simTime:function(){ return +(simSteps/60).toFixed(2); },
@@ -1433,7 +1447,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       host.innerHTML='<div class="actionbar"><button class="ghost" id="addPlayerFab">＋ Spelare</button><button class="primary" id="nextMatchFab">▶ '+(seriesDone()?"Se resultat":"Nästa match")+'</button></div>'; wireBottom(); return; }
     var turnName=live.turnPid?state.players[live.turnPid].name:"";
     if(!tray3d){ tray3d=document.createElement("div"); tray3d.className="tray tray3d";
-      tray3d.innerHTML='<div class="tturn" id="t3turn"></div><canvas id="dice3d" class="dicecanvas"></canvas><div class="tactions" id="t3act"></div><div class="hint2" id="t3hint"></div>'; }
+      tray3d.innerHTML='<div class="trayhead"><div class="tturn" id="t3turn"></div><button class="traytoggle" id="t3min" type="button"></button></div><canvas id="dice3d" class="dicecanvas"></canvas><div class="tactions" id="t3act"></div><div class="hint2" id="t3hint"></div>'; }
     document.body.classList.add("d3d");
     if(host.firstChild!==tray3d){ host.innerHTML=""; host.appendChild(tray3d); }
     var canvas=tray3d.querySelector("#dice3d");
@@ -1441,6 +1455,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       Dice3D.onPick(function(ix){ if(!diceRolling && state.game.live.rollNo>=1 && !gameComplete() && controlsTurn()){ toggleHold(ix); sfxTick(); vibrate(18); } });
       Dice3D.onImpact(function(vel,kind){ sfxBounce(vel,kind); if(vel>3.2) vibrate(Math.min(45,Math.round(9+vel*2.2))); }); }
     Dice3D.resume(); Dice3D.resize();
+    var mb=$("t3min"); if(mb) mb.onclick=toggleTrayMin; applyTrayMin();   // restore collapsed/expanded state + wire toggle
     var nLocked=0; if(live.rollNo>=1){ for(var li=0;li<live.held.length;li++) if(live.held[li]) nLocked++; }
     if(needSeat()){
       // This phone hasn't said who it is yet — ask, so ownership can kick in (fixes "everyone sees Din tur").
