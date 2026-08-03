@@ -670,7 +670,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   var room=currentRoom(); if(!room){ room=rid(4); history.replaceState(null,"","#"+room); }
   var TOPIC="kindfilter_yatzy_v3_"+room, NTFY="https://ntfy.sh/", storeKey="yz3_"+room, meKey="yzme_"+room, sharedKey="yzshared_"+room;
   var mePid = localStorage.getItem(meKey) || null;
-  var BUILD = "2026-08-03 · sync2";                            // bump on each deploy so the live version is verifiable
+  var BUILD = "2026-08-03 · sync3";                            // bump on each deploy so the live version is verifiable
   var sharedDevice = localStorage.getItem(sharedKey)==="1";   // "this phone is shared by everyone" — pass-around play
   function setSeat(pid){ mePid=pid; sharedDevice=false; try{ localStorage.setItem(meKey,pid); localStorage.removeItem(sharedKey); }catch(e){} renderAll(); }
   function setShared(){ mePid=null; sharedDevice=true; try{ localStorage.removeItem(meKey); localStorage.setItem(sharedKey,"1"); }catch(e){} renderAll(); }
@@ -901,7 +901,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // With 2+ players on a digital game, a device must say who it is before it can play — otherwise every
   // phone would think it's their turn. Until then the tray shows a picker instead of the roll controls.
   function needSeat(){ return state.cfg.mode==="digital" && playerList().length>=2 && mePid==null && !sharedDevice; }
-  var diceRolling=false, authVals={}, rollWatchdog=null;
+  var diceRolling=false, authVals={}, rollWatchdog=null, pendingRoll={};
   function setRolling(v){ diceRolling=v; if(rollWatchdog){ clearTimeout(rollWatchdog); rollWatchdog=null; }
     if(v){ rollWatchdog=setTimeout(function(){ diceRolling=false; renderAll(); },6500); } } // never let the roll state stick
   function use3D(){ return state.cfg.mode==="digital" && Dice3D.supported(); }
@@ -914,26 +914,34 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var seq=(live.seq||0)+1; opts=opts||{};
     var seed=(Math.floor(Math.random()*2147483647))>>>0, power=opts.power||1, dir=opts.dir||[0,1];
     if(use3D()){
-      emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:[],held:held,seq:seq,rolled:true,seed:seed,power:power,dir:dir,prev:prev});
+      // Compute the result NOW (headless physics) so the authoritative faces travel IN the roll message.
+      // Every phone gets the answer from this one message; no phone waits on a second delta that ntfy might
+      // drop. The roller replays this exact simulation locally so it can never diverge from what it sent.
+      var vals=[], rec=null;
+      if(Dice3D.inited()){ rec=Dice3D.simulate(prev, held, {seed:seed,power:power,dir:dir}); vals=rec.faces.slice(); pendingRoll[live.turnPid+"/"+(live.rollNo+1)]=rec; }
+      else { for(i=0;i<n;i++) vals.push(held[i]?prev[i]:die()); }   // canvas not ready → still send a valid result
+      emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:vals,held:held,seq:seq,rolled:true,seed:seed,power:power,dir:dir,prev:prev});
     } else {
-      var vals=[]; for(i=0;i<n;i++) vals.push(held[i]?prev[i]:die());
-      emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:vals,held:held,seq:seq,rolled:true,seed:seed,power:power,dir:dir});
+      var rvals=[]; for(i=0;i<n;i++) rvals.push(held[i]?prev[i]:die());
+      emit({t:"live",turnPid:live.turnPid,rollNo:live.rollNo+1,values:rvals,held:held,seq:seq,rolled:true,seed:seed,power:power,dir:dir});
     }
   }
-  // The ROLLER's physics is authoritative: throw, let the dice land, read the faces, broadcast them.
-  // Every other device tumbles for show only and then settles onto the roller's faces (see settleTo),
-  // so both phones always end on the exact same result instead of each running divergent physics.
+  // The roll's RESULT arrives inside the roll message (d.values). The roller replays its own recorded
+  // simulation; every other phone plays a tumble for show and then settles onto those exact faces — so all
+  // screens always end on the same dice, with no dependence on a second network message.
   function triggerDiceRoll(d, initiated){
     var key=d.turnPid+"/"+d.rollNo;
+    if(d.values && d.values.length){ authVals[key]=d.values.slice(); }
     if(use3D() && Dice3D.inited()){ setRolling(true);
-      if(d.values && d.values.length){ authVals[key]=d.values.slice(); } // came from a non-WebGL device
-      Dice3D.throwDice(d.prev||[], d.held, {power:d.power,dir:d.dir,seed:d.seed,key:key}, function(){
-        if(initiated){ emit({t:"diceval",values:Dice3D.faces(),rollNo:d.rollNo,turnPid:d.turnPid}); }
-        else if(authVals[key]){ Dice3D.settleTo(authVals[key].slice(), function(){ finalizeDice(key,false); }); } // roller's result already here → settle onto it
-        // else: rested before the result arrived; the diceval delta will settle us
-      });
-    } else if(use3D()){ // WebGL not ready yet: fall back to RNG so play isn't blocked
-      setRolling(false); if(initiated){ var n=(d.prev||[]).length||V().dice, f=[],i; for(i=0;i<n;i++) f.push(d.held&&d.held[i]?d.prev[i]:die()); emit({t:"diceval",values:f,rollNo:d.rollNo,turnPid:d.turnPid}); }
+      var rec=initiated?pendingRoll[key]:null; if(rec) delete pendingRoll[key];
+      if(rec && rec.frames){ Dice3D.playRoll(rec, d.held, key, function(){ finalizeDice(key,true); }); }   // roller: replay the real physics it computed
+      else {
+        Dice3D.throwDice(d.prev||[], d.held, {power:d.power,dir:d.dir,seed:d.seed,key:key}, function(){
+          if(authVals[key]){ Dice3D.settleTo(authVals[key].slice(), function(){ finalizeDice(key,false); }); } // settle onto the authoritative faces
+          // else: rested before the result arrived (shouldn't happen now faces ride in the roll msg)
+        });
+      }
+    } else if(use3D()){ setRolling(false); renderAll(); // canvas not ready: values already in state, board shows them
     } else { setRolling(false); queueAnim(d.values,d.held); } }
   function finalizeDice(key, initiated){ setRolling(false); renderAll(); }
   function queueAnim(vals,held){ setTimeout(function(){ animateRoll(vals,held); },0); }
@@ -973,7 +981,12 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var libs=!!(TH&&CN);
     var renderer,scene,camera,world,dtMat,floorMat,wallMat,rafId=null,inited=false,canvasEl=null,running=false,ctxLost=false;
     var dice=[], N=0, animating=false, phase="idle", settleCb=null, restT=0, accum=0, lastT=0, throwStart=0, declumps=0, simSteps=0, snapIx=[], snapInc=0.14, pickCb=null, shownKey="", impactCb=null, lastVib=0;
-    function onCollide(e){ if(phase!=="throw"||!impactCb) return; var c=e&&e.contact; if(!c||!c.getImpactVelocityAlongNormal) return; var v=Math.abs(c.getImpactVelocityAlongNormal()); if(v<1.3) return; var t=now(); if(t-lastVib<34) return; lastVib=t; var kind=(e.body&&e.body._env)?e.body._env:"die"; impactCb(v,kind); }
+    var simRecording=false, simImpacts=null, simStep=0;                                  // headless-simulation capture
+    var repFrames=null, repFaces=null, repImp=null, repN=0, repHeld=null, repStart=0, repCb=null, repImpIx=0;  // deterministic replay
+    function onCollide(e){ var c=e&&e.contact; if(!c||!c.getImpactVelocityAlongNormal) return; var v=Math.abs(c.getImpactVelocityAlongNormal()); if(v<1.3) return;
+      var kind=(e.body&&e.body._env)?e.body._env:"die";
+      if(simRecording){ simImpacts.push([simStep,+v.toFixed(2),kind==="floor"?1:0]); return; }   // record for replay, don't play during headless sim
+      if(phase!=="throw"||!impactCb) return; var t=now(); if(t-lastVib<34) return; lastVib=t; impactCb(v,kind); }
     var FX=6.4, FZ=2.3, DS=1.0;
     var LN={1:[1,0,0],6:[-1,0,0],2:[0,1,0],5:[0,-1,0],3:[0,0,1],4:[0,0,-1]};
     function now(){ return (window.performance&&performance.now)?performance.now():(+new Date()); }
@@ -1099,6 +1112,46 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       }
       if(!snapIx.length){ animating=false; phase="idle"; if(cb) cb(); }
     }
+    // Run the WHOLE throw headlessly (no rendering) and capture it: the faces it lands on, every frame's
+    // transforms, and the bounce impacts. The roller does this at roll time so the authoritative result can
+    // ride along IN the roll message — one reliable message — instead of a second 'diceval' that ntfy may
+    // drop or delay (that delay was why the other phones showed a different/last-seen result).
+    function simulate(prevValues,held,opts){ if(!inited) return {faces:prevValues.slice(),frames:null,impacts:null,n:prevValues.length};
+      var n=prevValues.length; ensureDice(n); opts=opts||{};
+      var power=Math.max(0.6,Math.min(2.4,opts.power||1)), dir=opts.dir||[0,1], seed=(opts.seed||1)>>>0, rnd=mulberry(seed);
+      var ix=[];
+      for(var i=0;i<n;i++){ var d=dice[i]; d.held=!!(held&&held[i]);
+        if(d.held){ setDynamic(d.body,false); d.body.velocity.setZero(); d.body.angularVelocity.setZero(); sync(d); continue; }
+        setDynamic(d.body,true);
+        d.body.position.set(slotX(i,n)+(rnd()-0.5)*1.0, 4.0+rnd()*1.6, (rnd()-0.5)*(2*FZ-1.4));
+        var p=1.8+power*2.6; d.body.velocity.set(dir[0]*p+(rnd()-0.5)*2.6, -5-rnd()*2, dir[1]*p*0.5+(rnd()-0.5)*2.6);
+        var s=15+power*10; d.body.angularVelocity.set((rnd()-0.5)*s,(rnd()-0.5)*s,(rnd()-0.5)*s);
+        ix.push(i); }
+      var frames=[], restSteps=0, dcl=0, MAX=520; simImpacts=[]; simRecording=true;
+      for(simStep=0; simStep<MAX; simStep++){
+        world.step(1/60);
+        var fr=[]; for(i=0;i<n;i++){ var b=dice[i].body; fr.push(+b.position.x.toFixed(3),+b.position.y.toFixed(3),+b.position.z.toFixed(3),+b.quaternion.x.toFixed(4),+b.quaternion.y.toFixed(4),+b.quaternion.z.toFixed(4),+b.quaternion.w.toFixed(4)); }
+        frames.push(fr);
+        var moving=0; ix.forEach(function(k){ var bb=dice[k].body; if(bb.velocity.length()>0.26||bb.angularVelocity.length()>0.4) moving++; });
+        if(moving===0) restSteps++; else restSteps=0;
+        if(restSteps>=15){
+          var stacked=(dcl<6)?ix.filter(function(k){ return dice[k].body.position.y>1.0; }):[];
+          if(stacked.length){ dcl++; restSteps=0; stacked.forEach(function(k){ var s2=freeSpot(k); dice[k].body.position.set(s2[0],3.0+rnd()*0.6,s2[1]); dice[k].body.velocity.set((rnd()-0.5)*1.4,-3.8,(rnd()-0.5)*1.4); dice[k].body.angularVelocity.set((rnd()-0.5)*8,(rnd()-0.5)*8,(rnd()-0.5)*8); }); }
+          else break;
+        }
+      }
+      simRecording=false;
+      for(i=0;i<n;i++) sync(dice[i]);
+      var faces=[]; for(i=0;i<n;i++) faces.push(topFace(dice[i].mesh));
+      return {faces:faces, frames:frames, impacts:simImpacts, n:n};
+    }
+    // Play a recorded simulation back in real time — the roller sees its exact physics roll (bounces + sound),
+    // and because the faces were already broadcast, it can't diverge from what every other phone will show.
+    function playRoll(rec,held,key,cb){ if(!inited||!rec||!rec.frames||!rec.frames.length){ if(cb){cb();} return; }
+      var n=rec.n; ensureDice(n); repFrames=rec.frames; repFaces=rec.faces; repImp=rec.impacts||[]; repN=n; repHeld=held; repCb=cb; repImpIx=0; repStart=now();
+      shownKey=key||shownKey; declumps=0; animating=true; phase="replay";
+      for(var i=0;i<n;i++){ var d=dice[i]; d.held=!!(held&&held[i]); d.snapTo=null; applyHeld(d); if(d.held) sync(d); }
+      var f0=repFrames[0]; for(i=0;i<n;i++){ if(dice[i].held) continue; dice[i].mesh.position.set(f0[i*7],f0[i*7+1],f0[i*7+2]); dice[i].mesh.quaternion.set(f0[i*7+3],f0[i*7+4],f0[i*7+5],f0[i*7+6]); } }
     // Gentle correction used ONLY on remote viewers if their replay diverged from the authoritative result.
     function reconcile(values,cb){ if(!inited){ if(cb)cb(); return; } var list=[];
       for(var i=0;i<N && i<values.length;i++){ if(topFace(dice[i].mesh)!==values[i]) list.push(i); }
@@ -1162,11 +1215,19 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
             else { phase="idle"; animating=false; if(cb) cb(); }
           }
         }
-      } else if(phase==="snap"){ var done=true;
-        snapIx.forEach(function(i){ var d=dice[i]; d.snapT=Math.min(1,d.snapT+snapInc); if(d.snapT<1) done=false;
+      } else if(phase==="replay"){
+        var el=(now()-repStart)/(1000/60), fi=Math.floor(el); if(fi<0) fi=0; var last=repFrames.length-1; var done=fi>=last; if(fi>last) fi=last;
+        var fr=repFrames[fi];
+        for(var r=0;r<repN;r++){ if(dice[r].held) continue; dice[r].mesh.position.set(fr[r*7],fr[r*7+1],fr[r*7+2]); dice[r].mesh.quaternion.set(fr[r*7+3],fr[r*7+4],fr[r*7+5],fr[r*7+6]); }
+        while(repImp && repImpIx<repImp.length && repImp[repImpIx][0]<=fi){ var im=repImp[repImpIx]; repImpIx++; var tv=now(); if(impactCb && tv-lastVib>=34){ lastVib=tv; impactCb(im[1], im[2]?"floor":"die"); } }
+        if(done){ // land: sync bodies to the final frame, then lay any tilt perfectly flat on the known faces
+          for(r=0;r<repN;r++){ if(dice[r].held) continue; var b=dice[r].body; b.velocity.setZero(); b.angularVelocity.setZero(); b.position.set(fr[r*7],fr[r*7+1],fr[r*7+2]); b.quaternion.set(fr[r*7+3],fr[r*7+4],fr[r*7+5],fr[r*7+6]); sync(dice[r]); }
+          var rcb=repCb; repCb=null; repFrames=null; phase="idle"; animating=false; settleTo(repFaces, rcb); }
+      } else if(phase==="snap"){ var done2=true;
+        snapIx.forEach(function(i){ var d=dice[i]; d.snapT=Math.min(1,d.snapT+snapInc); if(d.snapT<1) done2=false;
           var q=d.snapFrom.clone().slerp(d.snapTo,d.snapT); d.mesh.quaternion.copy(q);
           if(d.snapPTo){ d.mesh.position.copy(d.snapPFrom.clone().lerp(d.snapPTo,d.snapT)); } else d.mesh.position.set(d.body.position.x,d.body.position.y,d.body.position.z); });
-        if(done){ snapIx.forEach(function(i){ var d=dice[i]; d.body.quaternion.set(d.snapTo.x,d.snapTo.y,d.snapTo.z,d.snapTo.w);
+        if(done2){ snapIx.forEach(function(i){ var d=dice[i]; d.body.quaternion.set(d.snapTo.x,d.snapTo.y,d.snapTo.z,d.snapTo.w);
             if(d.snapPTo){ d.body.position.set(d.snapPTo.x,d.snapPTo.y,d.snapPTo.z); d.snapPTo=null; d.snapPFrom=null; } sync(d); d.snapTo=null; }); phase="idle"; animating=false; var cb2=settleCb; settleCb=null; if(cb2) cb2(); }
       }
       if(renderer) renderer.render(scene,camera);
@@ -1182,7 +1243,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     function dieIndex(o){ while(o){ for(var i=0;i<dice.length;i++) if(dice[i].mesh===o) return i; o=o.parent; } return -1; }
     function setHeld(held){ for(var i=0;i<N;i++){ dice[i].held=!!(held&&held[i]); applyHeld(dice[i]); } }
     return { supported:supported, init:init, showStatic:showStatic, clearDice:clearDice, throwDice:throwDice, reflect:reflect, resize:resize, resume:resume, pause:pause,
-      setHeld:setHeld, faces:faces, reconcile:reconcile, settleTo:settleTo, recover:recover, onPick:function(cb){ pickCb=cb; }, onImpact:function(cb){ impactCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
+      setHeld:setHeld, faces:faces, reconcile:reconcile, settleTo:settleTo, simulate:simulate, playRoll:playRoll, recover:recover, onPick:function(cb){ pickCb=cb; }, onImpact:function(cb){ impactCb=cb; }, isAnimating:function(){return animating;}, inited:function(){return inited;},
       isContextLost:function(){ try{ return !renderer || renderer.getContext().isContextLost(); }catch(e){ return true; } },
       _topFace:function(i){ return dice[i]?topFace(dice[i].mesh):0; },
       _debug:function(i){ var d=dice[i]; return d?{x:+d.body.position.x.toFixed(3),y:+d.body.position.y.toFixed(3),z:+d.body.position.z.toFixed(3),flat:+upNormalY(d.mesh).toFixed(3),held:d.held,lock:d.lock?d.lock.visible:false,color:(d.mesh.material.color?d.mesh.material.color.getHex():0),n:N}:null; },
