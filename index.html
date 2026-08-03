@@ -668,8 +668,13 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   if(!clientId){ clientId=rid(8,"abcdefghijklmnopqrstuvwxyz0123456789"); localStorage.setItem("yz_cid",clientId); }
   function currentRoom(){ var h=(location.hash||"").replace(/^#/,"").trim().toUpperCase(); return /^[A-Z0-9]{3,8}$/.test(h)?h:null; }
   var room=currentRoom(); if(!room){ room=rid(4); history.replaceState(null,"","#"+room); }
-  var TOPIC="kindfilter_yatzy_v3_"+room, NTFY="https://ntfy.sh/", storeKey="yz3_"+room, meKey="yzme_"+room;
+  var TOPIC="kindfilter_yatzy_v3_"+room, NTFY="https://ntfy.sh/", storeKey="yz3_"+room, meKey="yzme_"+room, sharedKey="yzshared_"+room;
   var mePid = localStorage.getItem(meKey) || null;
+  var BUILD = "2026-08-03 · sync2";                            // bump on each deploy so the live version is verifiable
+  var sharedDevice = localStorage.getItem(sharedKey)==="1";   // "this phone is shared by everyone" — pass-around play
+  function setSeat(pid){ mePid=pid; sharedDevice=false; try{ localStorage.setItem(meKey,pid); localStorage.removeItem(sharedKey); }catch(e){} renderAll(); }
+  function setShared(){ mePid=null; sharedDevice=true; try{ localStorage.removeItem(meKey); localStorage.setItem(sharedKey,"1"); }catch(e){} renderAll(); }
+  function clearSeat(){ mePid=null; sharedDevice=false; try{ localStorage.removeItem(meKey); localStorage.removeItem(sharedKey); }catch(e){} renderAll(); }
 
   // ============================================================ STATE
   function blankGame(no){ return { no:no||1, scores:{}, ybonus:{}, last:null, clearedAt:0, live:{turnPid:null,rollNo:0,values:[],held:[],seq:0,ts:0,cid:""}, startedTs:0, done:false }; }
@@ -859,7 +864,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   window.__YZ.rolling = function(){ return diceRolling; };
   window.__YZ.pids = function(){ return playerList(); };
   window.__YZ.me = function(){ return mePid; };
-  window.__YZ.setMe = function(pid){ mePid=pid; try{ localStorage.setItem(meKey,pid); }catch(e){} renderAll(); };
+  window.__YZ.setMe = function(pid){ setSeat(pid); };
+  window.__YZ.setShared = function(){ setShared(); };
+  window.__YZ.needSeat = function(){ return needSeat(); };
   window.__YZ.roll = function(o){ rollDice(o); };
   window.__YZ.commit = function(pid,cat){ commit(pid,cat); };
   window.__YZ.controls = function(){ return controlsTurn(); };
@@ -889,8 +896,11 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // Once you mark "(du)" on a player, only your device can roll/hold/score on that player's turn —
   // so you can no longer roll for the other phone. An unclaimed device (mePid null) still controls
   // everything, so a single shared phone passed around keeps working.
-  function canControl(pid){ if(state.cfg.mode!=="digital") return true; return mePid==null || mePid===pid; }
+  function canControl(pid){ if(state.cfg.mode!=="digital") return true; if(sharedDevice) return true; if(mePid!=null) return mePid===pid; return playerList().length<2; }
   function controlsTurn(){ var t=state.game.live.turnPid; return !!(t && canControl(t)); }
+  // With 2+ players on a digital game, a device must say who it is before it can play — otherwise every
+  // phone would think it's their turn. Until then the tray shows a picker instead of the roll controls.
+  function needSeat(){ return state.cfg.mode==="digital" && playerList().length>=2 && mePid==null && !sharedDevice; }
   var diceRolling=false, authVals={}, rollWatchdog=null;
   function setRolling(v){ diceRolling=v; if(rollWatchdog){ clearTimeout(rollWatchdog); rollWatchdog=null; }
     if(v){ rollWatchdog=setTimeout(function(){ diceRolling=false; renderAll(); },6500); } } // never let the roll state stick
@@ -1358,8 +1368,19 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       Dice3D.onImpact(function(vel,kind){ sfxBounce(vel,kind); if(vel>3.2) vibrate(Math.min(45,Math.round(9+vel*2.2))); }); }
     Dice3D.resume(); Dice3D.resize();
     var nLocked=0; if(live.rollNo>=1){ for(var li=0;li<live.held.length;li++) if(live.held[li]) nLocked++; }
+    if(needSeat()){
+      // This phone hasn't said who it is yet — ask, so ownership can kick in (fixes "everyone sees Din tur").
+      tray3d.querySelector("#t3turn").innerHTML = '<b>Vem spelar på den här telefonen?</b>';
+      var pick=''; playerList().forEach(function(id){ pick+='<button class="roll seatpick" data-seat="'+id+'" style="margin:3px">Jag är '+esc(state.players[id].name)+'</button>'; });
+      pick+='<button class="undo seatshare" title="Delad telefon" style="margin:3px">📱 Delad telefon</button>';
+      tray3d.querySelector("#t3act").innerHTML = pick;
+      tray3d.querySelector("#t3hint").textContent = "Välj ditt namn så kan bara du kasta på din tur. ”Delad telefon” = ni skickar runt en telefon och alla spelar här.";
+      Array.prototype.forEach.call(tray3d.querySelectorAll(".seatpick"),function(b){ b.onclick=function(){ setSeat(b.getAttribute("data-seat")); }; });
+      var shb=tray3d.querySelector(".seatshare"); if(shb) shb.onclick=setShared;
+      if(!diceRolling){ if(live.rollNo>=1 && live.values.length===V().dice) Dice3D.reflect(live.values.slice(0,V().dice),live.held,live.turnPid+"/"+live.rollNo); else Dice3D.reflect([],[],live.turnPid+"/0"); }
+      return;
+    }
     var mine=controlsTurn();                                          // does THIS device control the current turn?
-    var youName=(mePid&&state.players[mePid])?state.players[mePid].name:null;
     var turnTxt = live.turnPid ? ((mine?"Din tur":("<b>"+esc(turnName)+"</b>s tur"))+" · kast "+live.rollNo+"/3") : "";
     tray3d.querySelector("#t3turn").innerHTML = turnTxt + (nLocked?' · <span style="color:var(--brand);font-weight:800">🔒 '+nLocked+' låst'+(nLocked>1?'a':'')+'</span>':'');
     var undoB=(state.game.last?'<button class="undo" id="undoBtn" title="Ångra">↩︎</button>':'');
@@ -1371,10 +1392,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       var rollLabel = diceRolling?"🎲 Rullar…":(live.rollNo>=3?"Skriv in poäng ovan":(live.rollNo===0?"🎲 Kasta":"🎲 Kasta igen ("+(3-live.rollNo)+" kvar)"));
       var shakeB=(shakeSupported()&&!shakeArmed?'<button class="undo" id="shakeBtn" title="Skaka för att kasta">📳</button>':'');
       tray3d.querySelector("#t3act").innerHTML = undoB+shakeB+'<button class="roll" id="rollBtn"'+((live.rollNo>=3||diceRolling)?" disabled":"")+'>'+rollLabel+'</button>';
-      var nudge=(mePid==null && playerList().length>=2)?" · Tryck på ditt namn högst upp och välj ”Det här är jag” så bara du kan kasta på din tur.":"";
-      tray3d.querySelector("#t3hint").textContent = (live.rollNo<1?(shakeArmed?"Skaka telefonen eller tryck Kasta. Tryck på en tärning för att låsa den.":"Tryck Kasta för att rulla tärningarna. Tryck på en tärning för att låsa den."):"Tryck på tärningar för att låsa dem. Tryck en grön ruta för att skriva in.")+nudge;
+      tray3d.querySelector("#t3hint").textContent = (live.rollNo<1?(shakeArmed?"Skaka telefonen eller tryck Kasta. Tryck på en tärning för att låsa den.":"Tryck Kasta för att rulla tärningarna. Tryck på en tärning för att låsa den."):"Tryck på tärningar för att låsa dem. Tryck en grön ruta för att skriva in.");
     }
-    $("rollBtn").onclick=function(){ rollDice(); };
+    var rb0=$("rollBtn"); if(rb0) rb0.onclick=function(){ rollDice(); };
     var ub=$("undoBtn"); if(ub) ub.onclick=undoLast;
     var sb=$("shakeBtn"); if(sb) sb.onclick=armShake;
     if(!diceRolling){ if(live.rollNo>=1 && live.values.length===V().dice) Dice3D.reflect(live.values.slice(0,V().dice),live.held,live.turnPid+"/"+live.rollNo); else Dice3D.reflect([],[],live.turnPid+"/0"); }
@@ -1456,8 +1476,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       '<div class="row2"><button class="btn danger full" id="pRemove">Ta bort spelare</button></div>');
     var input=$("pnameInput");
     $("pRename").onclick=function(){ renamePlayer(pid,input.value); closeSheet(); };
-    $("pMe").onclick=function(){ if(mePid===pid){ mePid=null; localStorage.removeItem(meKey); } else { mePid=pid; localStorage.setItem(meKey,pid); } closeSheet(); renderAll(); };
-    $("pRemove").onclick=function(){ if(confirm("Ta bort "+p.name+" och deras poäng?")){ if(mePid===pid){mePid=null;localStorage.removeItem(meKey);} removePlayer(pid); closeSheet(); } };
+    $("pMe").onclick=function(){ if(mePid===pid) clearSeat(); else setSeat(pid); closeSheet(); };
+    $("pRemove").onclick=function(){ if(confirm("Ta bort "+p.name+" och deras poäng?")){ if(mePid===pid) clearSeat(); removePlayer(pid); closeSheet(); } };
   }
 
   function openAddPlayer(){
@@ -1542,16 +1562,28 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       '<button id="mSetup"><span class="em">⚙️</span> Inställningar (variant, serie, regler)</button>'+
       '<button id="mSound"><span class="em">'+(soundOn?"🔊":"🔇")+'</span> Ljud: '+(soundOn?"På":"Av")+'</button>'+
       '<button id="mHaptics"><span class="em">📳</span> Vibration: '+(hapticsOn?"På":"Av")+'</button>'+
+      '<button id="mSeat"><span class="em">🙋</span> Vem är jag på den här telefonen'+(mePid&&state.players[mePid]?(": "+esc(state.players[mePid].name)):(sharedDevice?": Delad telefon":""))+'</button>'+
       '<button id="mReset" class="warn"><span class="em">♻️</span> Nollställ pågående match</button>'+
       '<button id="mNew"><span class="em">🆕</span> Skapa nytt rum</button></div>'+
-      '<div class="hint">Alla med länken ser samma tavla i realtid och kan spela. Rummet är öppet för alla som har koden.</div>');
+      '<div class="hint">Alla med länken ser samma tavla i realtid och kan spela. Rummet är öppet för alla som har koden.</div>'+
+      '<div class="hint" style="opacity:.6">Version '+BUILD+'</div>');
     $("mShare").onclick=function(){ closeSheet(); openInvite(); };
     $("mAdd").onclick=function(){ closeSheet(); openAddPlayer(); };
     $("mSetup").onclick=function(){ closeSheet(); openSetup(); };
     $("mSound").onclick=function(){ toggleSound(); closeSheet(); };
     $("mHaptics").onclick=function(){ toggleHaptics(); closeSheet(); };
+    $("mSeat").onclick=function(){ closeSheet(); openSeatSheet(); };
     $("mReset").onclick=function(){ if(confirm("Nollställ den pågående matchen? Serie & statistik påverkas inte.")){ resetCurrentGame(); closeSheet(); toast("Matchen nollställd"); } };
     $("mNew").onclick=function(){ if(confirm("Skapa ett nytt tomt rum?")){ location.hash="#"+rid(4); location.reload(); } };
+  }
+  function openSeatSheet(){ var pl=playerList();
+    var b='<h3>Vem spelar på den här telefonen?</h3><p class="sub">Bara du kan kasta och skriva in på din tur.</p><div class="menu-list">';
+    pl.forEach(function(id){ b+='<button data-seat="'+id+'">'+(mePid===id?'<span class="em">✓</span> ':'<span class="em">🙋</span> ')+esc(state.players[id].name)+(mePid===id?' (du)':'')+'</button>'; });
+    b+='<button data-shared="1">'+(sharedDevice?'<span class="em">✓</span> ':'<span class="em">📱</span> ')+'Delad telefon – alla spelar här</button>';
+    b+='</div>';
+    openSheet(b);
+    Array.prototype.forEach.call(sheet.querySelectorAll("[data-seat]"),function(x){ x.onclick=function(){ setSeat(x.getAttribute("data-seat")); closeSheet(); }; });
+    var sx=sheet.querySelector("[data-shared]"); if(sx) sx.onclick=function(){ setShared(); closeSheet(); };
   }
   function resetCurrentGame(){ emit({t:"resetgame"}); }
 
